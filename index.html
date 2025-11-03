@@ -1,5 +1,4 @@
-<!-- templates/index.html - 3D 互動模擬版本 (L 字型 RGB 光源與正確的垂直、深度反轉) -->
-
+<!-- 安全穩定版：3D 針孔成像模擬器（基於你提供的原始程式） -->
 <!DOCTYPE html>
 <html lang="zh-Hant">
 <head>
@@ -12,17 +11,16 @@
             top: 0;
             width: 100%;
             padding: 10px;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(255, 255, 255, 0.9);
             box-shadow: 0 2px 5px rgba(0,0,0,0.1);
             box-sizing: border-box;
             z-index: 10;
         }
-        #info h1 { margin: 0 0 5px 0; font-size: 1.5em; }
-        #controls { font-size: 0.9em; margin-top: 5px; pointer-events: auto; } /* 讓 controls 區域可點擊 */
+        #info h1 { margin: 0 0 5px 0; font-size: 1.2em; }
+        #controls { font-size: 0.9em; margin-top: 5px; pointer-events: auto; }
         #ui-controls { margin-top: 10px; display: flex; justify-content: center; gap: 20px; }
         #ui-controls label { cursor: pointer; user-select: none; }
-        
-        /* 讓 3D 容器覆蓋整個視窗 */
+
         #container {
             position: fixed;
             top: 0;
@@ -31,9 +29,24 @@
             height: 100%;
             cursor: grab;
         }
-        #container:active {
-            cursor: grabbing;
+        #container:active { cursor: grabbing; }
+
+        /* 當 WebGL 當掉時顯示覆蓋訊息 */
+        #errorOverlay {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.95);
+            padding: 20px 28px;
+            border-radius: 8px;
+            box-shadow: 0 6px 24px rgba(0,0,0,0.2);
+            z-index: 999;
+            display: none;
+            font-family: Arial, sans-serif;
+            color: #333;
         }
+        #errorOverlay button { margin-top: 12px; }
     </style>
 </head>
 <body>
@@ -43,88 +56,94 @@
     <div id="info">
         <h1>3D 針孔成像模擬器</h1>
         <div id="controls">
-            <!-- 已修正符號：D_物 -> p, D_像 -> q, H_像 -> h -->
             <p>使用滑鼠或手指拖曳空白處來改變視角。點擊光源/針孔/屏幕可以拖曳它在 X 軸上移動。</p>
             <p>物距 $p$ : <strong id="D_obj_display">--</strong> | 像距 $q$ : <strong id="D_img_display">--</strong> | 像高 $h$ : <strong id="H_img_display">--</strong> | 放大率 $M$ : <strong id="magnification_display">--</strong></p>
-            
             <div id="ui-controls">
                 <label style="color: red;"><input type="checkbox" id="showRed" checked> 紅光 (R)</label>
                 <label style="color: green;"><input type="checkbox" id="showGreen" checked> 綠光 (G)</label>
                 <label style="color: blue;"><input type="checkbox" id="showBlue" checked> 藍光 (B)</label>
-                <!-- NEW: 顯示光路的總開關 -->
                 <label style="color: #555;"><input type="checkbox" id="showRays" checked> 顯示光路</label>
             </div>
         </div>
     </div>
 
-    
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    
-<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <div id="errorOverlay">
+        <div><strong>⚠️ WebGL 或渲染進程發生錯誤</strong></div>
+        <div style="margin-top:8px;">若畫面停止更新，請點「重新載入」或關閉硬體加速後重試。</div>
+        <div style="margin-top:12px;">
+            <button id="reloadBtn">重新載入頁面</button>
+        </div>
+    </div>
+
+    <!-- three.js r128 (非 module 版本，方便直接 file:// 使用) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script>
         // MathJax 設定
         window.MathJax = {
             tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
         };
-
-        // --- 3D 核心參數 ---
+        // --- 基本設定與變數 ---
         let scene, camera, renderer, controls;
         const container = document.getElementById('container');
-        
-        const SPHERE_RADIUS = 0.8; 
-        const SPACING = 3; // 三個光源球之間的間隔 (3 單位)
-        const HALF_SPACING = SPACING / 2; // 1.5
 
-        // NEW: 顏色顯示狀態追蹤
-        const COLOR_VISIBILITY = {
-            red: true,
-            green: true,
-            blue: true,
-            showRays: true // NEW: 光路總開關
-        };
+        const SPHERE_RADIUS = 0.8;
+        const SPACING = 3;
+        const HALF_SPACING = SPACING / 2;
 
-        // L 字型光源的 (Y, Z) 坐標列表 [R, G, B]
+        const COLOR_VISIBILITY = { red: true, green: true, blue: true, showRays: true };
+
         const LIGHT_CONFIG = [
-            { color: 0xff0000, y: -HALF_SPACING, z: HALF_SPACING, key: 'red' },       // 0: Red (R)
-            { color: 0x00ff00, y: -HALF_SPACING, z: -HALF_SPACING, key: 'green' },    // 1: Green (G)
-            { color: 0x0000ff, y: HALF_SPACING, z: HALF_SPACING, key: 'blue' }         // 2: Blue (B)
+            { color: 0xff0000, y: -HALF_SPACING, z: HALF_SPACING, key: 'red' },
+            { color: 0x00ff00, y: -HALF_SPACING, z: -HALF_SPACING, key: 'green' },
+            { color: 0x0000ff, y: HALF_SPACING, z: HALF_SPACING, key: 'blue' }
         ];
 
-        const OBJECT_HEIGHT = SPACING; // 物體最大垂直跨度 (Y= -1.5 到 Y= 1.5, 總長度為 SPACING)
-        
-        // 拖曳範圍限制 (X 座標)
+        const OBJECT_HEIGHT = SPACING;
+
         const DRAG_LIMITS = {
-            object: { min: -35, max: -2 }, // 必須在針孔左邊 (X=0)，留 2 單位間隔
+            object: { min: -35, max: -2 },
             pinhole: { min: -10, max: 10 },
-            screen: { min: 2, max: 35 }    // 必須在針孔右邊 (X=0)，留 2 單位間隔
+            screen: { min: 2, max: 35 }
         };
 
-        // 模擬物件的初始距離：光源在左側(X=-15)，屏幕在右側(X=10)
         const INITIAL_DISTANCES = {
-            object_dist_neg: -15,   
-            pinhole_dist: 0,        
-            screen_dist_pos: 15     
+            object_dist_neg: -15,
+            pinhole_dist: 0,
+            screen_dist_pos: 15
         };
 
-        // 拖曳物件的狀態
         let drag_elements = {
-            object: { x: INITIAL_DISTANCES.object_dist_neg, color: 0xcccccc }, 
-            pinhole: { x: INITIAL_DISTANCES.pinhole_dist, color: 0xaeaeae }, 
-            screen: { x: INITIAL_DISTANCES.screen_dist_pos, color: 0xfad5be }  
+            object: { x: INITIAL_DISTANCES.object_dist_neg, color: 0xcccccc },
+            pinhole: { x: INITIAL_DISTANCES.pinhole_dist, color: 0xaeaeae },
+            screen: { x: INITIAL_DISTANCES.screen_dist_pos, color: 0xfad5be }
         };
 
-        // 3D 物件引用
-        let mesh_light_source; 
-        let mesh_image; 
-        let mesh_pinhole_wall, mesh_screen_wall;
-        let ray_lines = []; 
-        let drag_plane; 
+        // 3D 物件
+        let mesh_light_source = null;
+        let mesh_image = null;
+        let mesh_pinhole_wall = null, mesh_screen_wall = null;
+        let ray_lines = [];
+        let drag_plane = null;
 
-        // --- 輔助函式 ---
-        
-        // 更新資訊面板
+        // 更新節流（防抖）
+        let needsSimulationUpdate = false;
+        function requestSimulationUpdate() {
+            needsSimulationUpdate = true;
+        }
+
+        // Render FPS 上限（避免 GPU 過熱/崩潰）
+        const RENDER_FPS = 30;
+        const RENDER_INTERVAL = 1000 / RENDER_FPS;
+        let lastRenderTime = 0;
+
+        // 錯誤覆蓋
+        const errorOverlay = document.getElementById('errorOverlay');
+        const reloadBtn = document.getElementById('reloadBtn');
+        reloadBtn.addEventListener('click', () => location.reload());
+
+        // --- 資訊面板更新 ---
         function updateInfo(result) {
             const D_obj_display = document.getElementById('D_obj_display');
             const D_img_display = document.getElementById('D_img_display');
@@ -141,7 +160,7 @@
                 D_obj_display.textContent = result.D_obj.toFixed(1);
                 D_obj_display.style.color = 'black';
                 D_img_display.textContent = result.D_img.toFixed(1);
-                H_img_display.textContent = result.H_img.toFixed(1); 
+                H_img_display.textContent = result.H_img.toFixed(1);
                 magnification_display.textContent = result.M.toFixed(2);
             }
             
@@ -149,87 +168,74 @@
                 MathJax.typesetPromise([document.getElementById('controls')]);
             }
         }
+        
 
-        // 物理計算函式
+
+        // --- 計算函式（物距、像距、放大率） ---
         function calculateSimulation() {
             const D_obj = drag_elements.pinhole.x - drag_elements.object.x;
-            const D_img = drag_elements.screen.x - drag_elements.pinhole.x; 
-            
+            const D_img = drag_elements.screen.x - drag_elements.pinhole.x;
+
             let magnification = 0;
             let error = '';
 
             if (D_obj <= 0) {
-                error = `光源必須在針孔左側 (物距 > 0)。`; 
+                error = `⚠️ 光源必須在針孔左側 (物距 > 0)。`;
             } else if (D_img <= 0) {
-                error = `屏幕必須在針孔右側 (像距 > 0)。`; 
+                error = `⚠️ 屏幕必須在針孔右側 (像距 > 0)。`;
+            } else if (D_obj <= 1) {
+                error = `⚠️ 物距必須大於 1。`;
+            } else if (D_img <= 1) {
+                error = `⚠️ 像距必須大於 1。`;
             } else {
                 magnification = D_img / D_obj;
             }
-            
+
             const image_height_range = OBJECT_HEIGHT * magnification;
-            
-            return {
-                D_obj: D_obj,
-                D_img: D_img,
-                H_img: image_height_range, 
-                M: magnification,
-                error: error
-            };
+
+            return { D_obj, D_img, H_img: image_height_range, M: magnification, error };
         }
 
-        // --- 3D 物件建立函式 ---
-        
-        // 建立 RGB L 字型光源群組
+        // --- 建立物件的 helper ---
         function createLightSource(x, z_offset) {
             const group = new THREE.Group();
             const sphere_geo = new THREE.SphereGeometry(SPHERE_RADIUS, 16, 16);
-            
-            LIGHT_CONFIG.forEach((config, index) => {
+
+            LIGHT_CONFIG.forEach((config) => {
                 const mat = new THREE.MeshBasicMaterial({ color: config.color });
                 const mesh = new THREE.Mesh(sphere_geo, mat);
-                mesh.position.set(0, config.y, config.z); 
-                
-                // 儲存 colorKey，方便更新
-                mesh.userData.colorKey = config.key; 
-
+                mesh.position.set(0, config.y, config.z);
+                mesh.userData.colorKey = config.key;
                 group.add(mesh);
             });
-            
+
             group.position.set(x, 0, z_offset);
             return group;
         }
 
-        // 建立 RGB L 字型成像 (由三個分離的平面圓形組成)
         function createImage(x, z_offset, H_img) {
             const group = new THREE.Group();
-            
-            const magnification = H_img / OBJECT_HEIGHT;
-            const image_radius = SPHERE_RADIUS * magnification;
 
-            const plane_geometry = new THREE.CircleGeometry(image_radius, 32); 
-            
+            // 防止負或零半徑
+            const magnification = (OBJECT_HEIGHT === 0) ? 0 : (H_img / OBJECT_HEIGHT);
+            const safeMagn = (isFinite(magnification) && Math.abs(magnification) > 1e-8) ? magnification : 0;
+            const image_radius = Math.max(0.001, SPHERE_RADIUS * Math.abs(safeMagn));
+
+            const plane_geometry = new THREE.CircleGeometry(image_radius, 32);
+
             LIGHT_CONFIG.forEach((config) => {
                 const color = config.color;
-                
                 const y_pos_source = config.y;
                 const z_pos_source = config.z;
 
-                // 成像座標 (Y 和 Z 都需要反轉和縮放)
-                const y_pos_image = y_pos_source * -magnification; 
-                const z_pos_image = z_pos_source * -magnification; 
-                
+                const y_pos_image = y_pos_source * -safeMagn;
+                const z_pos_image = z_pos_source * -safeMagn;
+
                 const mat = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide });
                 const mesh = new THREE.Mesh(plane_geometry, mat);
-
-                // 旋轉到 YZ 平面 (屏幕方向)
-                mesh.rotation.y = Math.PI / 2; 
-
-                // 稍微偏移 0.1 單位的 X 軸，使其投影在屏幕上時不與屏幕牆重疊
-                mesh.position.set(0.1, y_pos_image, z_pos_image); 
-                
-                // 儲存 colorKey，方便更新
-                mesh.userData.colorKey = config.key; 
-
+                mesh.rotation.y = Math.PI / 2;
+                mesh.position.set(0.1, y_pos_image, z_pos_image);
+                mesh.userData.colorKey = config.key;
                 group.add(mesh);
             });
 
@@ -237,314 +243,324 @@
             return group;
         }
 
-        // 建立光路 (已修改為無限延伸光路)
         function createRayLine(start_x, start_y, start_z, end_x, end_y, end_z, color) {
             const pinhole_x = drag_elements.pinhole.x;
-            
-            const p_start = new THREE.Vector3(start_x, start_y, start_z); 
-            const p_pinhole = new THREE.Vector3(pinhole_x, 0, 0); 
-            const p_end = new THREE.Vector3(end_x, end_y, end_z); 
 
-            // 光線向量 (從針孔指向像點)
+            const p_start = new THREE.Vector3(start_x, start_y, start_z);
+            const p_pinhole = new THREE.Vector3(pinhole_x, 0, 0);
+            const p_end = new THREE.Vector3(end_x, end_y, end_z);
+
             const v_ray = p_end.clone().sub(p_pinhole);
-            
-            const EXTENSION_FACTOR = 15; 
-            
-            // 延伸光路到屏幕後方 (虛像區)
+
+            const EXTENSION_FACTOR = 15;
             const p_extended = p_pinhole.clone().add(v_ray.clone().multiplyScalar(EXTENSION_FACTOR));
-            
-            const points = [];
-            points.push(p_start);
-            points.push(p_pinhole);
-            points.push(p_extended); // NEW: 延伸到虛像側
-            
+
+            const points = [p_start, p_pinhole, p_extended];
+
             const geometry = new THREE.BufferGeometry().setFromPoints(points);
             const material = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
             return new THREE.Line(geometry, material);
         }
 
-        // 建立立體牆壁 (針孔或屏幕)
         function createWall(x, color, height, depth) {
             const wall_thickness = 0.5;
-
             const wall_geo = new THREE.BoxGeometry(wall_thickness, height, depth);
             const wall_mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.6 });
             const wall_mesh = new THREE.Mesh(wall_geo, wall_mat);
             wall_mesh.position.set(x, 0, 0);
 
-            // 標記針孔中心
-            if (x === drag_elements.pinhole.x) {
+            // 標記針孔中心（以 pinhole 的當前 x 比對）
+            if (Math.abs(x - drag_elements.pinhole.x) < 1e-6) {
                 const center_geo = new THREE.SphereGeometry(0.2, 8, 8);
                 const center_mat = new THREE.MeshBasicMaterial({ color: 0x000000 });
                 const center_mesh = new THREE.Mesh(center_geo, center_mat);
                 center_mesh.position.set(0, 0, 0);
                 wall_mesh.add(center_mesh);
             }
-            
+
             return wall_mesh;
         }
 
-        // --- 核心更新邏輯 (已修復 NaN/Infinity 和釋放資源) ---
-        function updateSimulation() {
-            const result = calculateSimulation();
-            let magnification = result.M;
-
-            updateInfo(result);
-
-            // 1. 移除舊的成像和光路並釋放資源 (防止 WebGL 崩潰)
-            if (mesh_image) {
-                // 遞迴釋放幾何體和材質
-                mesh_image.traverse(obj => {
-                    if (obj.geometry) obj.geometry.dispose();
-                    if (obj.material) obj.material.dispose();
-                });
-                scene.remove(mesh_image);
-                mesh_image = null;
-            }
-            
-            ray_lines.forEach(ray => {
-                if (ray.geometry) ray.geometry.dispose();
-                if (ray.material) ray.material.dispose();
-                scene.remove(ray);
+        // --- 釋放資源的輔助（用於安全清理） ---
+        function disposeObjectRecursively(obj) {
+            obj.traverse(o => {
+                if (o.geometry) {
+                    try { o.geometry.dispose(); } catch (e) {}
+                }
+                if (o.material) {
+                    // material 可能是陣列或單一
+                    try {
+                        if (Array.isArray(o.material)) {
+                            o.material.forEach(m => { if (m) m.dispose(); });
+                        } else {
+                            o.material.dispose();
+                        }
+                    } catch (e) {}
+                }
             });
-            ray_lines = [];
-
-            // 2. 處理光源的顯示/隱藏
-            if (mesh_light_source) {
-                mesh_light_source.children.forEach(mesh => {
-                    const colorKey = mesh.userData.colorKey;
-                    mesh.visible = COLOR_VISIBILITY[colorKey];
-                });
-            }
-
-            // 3. 繪製新的成像和光路
-            const isRealImage = result.D_obj > 0 && result.D_img > 0;
-            const isCalculable = isFinite(magnification) && magnification > 0; 
-            
-            const MAX_MAGNIFICATION = 20; 
-            let safe_magnification = magnification;
-
-            if (magnification > MAX_MAGNIFICATION) {
-                 // 限制放大率用於幾何計算
-                 safe_magnification = MAX_MAGNIFICATION;
-            }
-
-
-            if (isRealImage && isCalculable) {
-                // 繪製成像 (使用箝制後的放大率進行大小計算)
-                mesh_image = createImage(
-                    drag_elements.screen.x, 0,
-                    OBJECT_HEIGHT * safe_magnification // 使用箝制後的像高
-                );
-                scene.add(mesh_image);
-                
-                // 根據 COLOR_VISIBILITY 隱藏/顯示成像
-                mesh_image.children.forEach(mesh => {
-                    const colorKey = mesh.userData.colorKey;
-                    mesh.visible = COLOR_VISIBILITY[colorKey];
-                });
-            }
-            
-            // 繪製光路 (只有在總開關和顏色開關都打開時)
-            if (COLOR_VISIBILITY.showRays) { 
-                LIGHT_CONFIG.forEach((config) => {
-                    const colorKey = config.key;
-
-                    if (!COLOR_VISIBILITY[colorKey]) {
-                        return; 
-                    }
-
-                    const ray_color = config.color;
-                    const y_pos_source = config.y;
-                    const z_pos_source = config.z;
-                    
-                    let y_pos_image, z_pos_image;
-                    
-                    if (!isCalculable) { 
-                        // 如果放大率無效，光線會從物體發出，經過針孔，並延伸向 (0,0,0) 遠處
-                        y_pos_image = 0; 
-                        z_pos_image = 0;
-                    } else {
-                        // 使用計算出的（非箝制）或安全的放大率來計算光路終點，以保持光線直線。
-                        // 這裡使用 safe_magnification 確保幾何座標不會爆炸。
-                        
-                        y_pos_image = y_pos_source * -safe_magnification; 
-                        z_pos_image = z_pos_source * -safe_magnification; 
-                    }
-
-                    // 繪製光路
-                    const ray = createRayLine(
-                        drag_elements.object.x, y_pos_source, z_pos_source, // 物體 (X, Y, Z)
-                        drag_elements.screen.x, y_pos_image, z_pos_image, // 像 (X, Y, Z) 
-                        ray_color
-                    );
-                    ray_lines.push(ray);
-                    scene.add(ray);
-                });
-            } 
-
-
-            // 4. 調整可拖曳物體的位置 (不變)
-            if (mesh_light_source) mesh_light_source.position.x = drag_elements.object.x;
-            if (mesh_pinhole_wall) mesh_pinhole_wall.position.x = drag_elements.pinhole.x;
-            if (mesh_screen_wall) mesh_screen_wall.position.x = drag_elements.screen.x;
         }
-        
-        // --- UI 事件處理 ---
+
+        // --- 主要更新邏輯（僅在 requestSimulationUpdate 時執行） ---
+        function updateSimulation() {
+            try {
+                const result = calculateSimulation();
+                let magnification = result.M;
+
+                updateInfo(result);
+
+                // 清理舊成像
+                if (mesh_image) {
+                    disposeObjectRecursively(mesh_image);
+                    scene.remove(mesh_image);
+                    mesh_image = null;
+                }
+
+                // 清理舊光線
+                ray_lines.forEach(ray => {
+                    try { if (ray.geometry) ray.geometry.dispose(); } catch(e) {}
+                    try { if (ray.material) ray.material.dispose(); } catch(e) {}
+                    scene.remove(ray);
+                });
+                ray_lines = [];
+
+                // 更新光源可見性
+                if (mesh_light_source) {
+                    mesh_light_source.children.forEach(mesh => {
+                        const colorKey = mesh.userData.colorKey;
+                        mesh.visible = !!COLOR_VISIBILITY[colorKey];
+                    });
+                }
+
+                const isRealImage = result.D_obj > 0 && result.D_img > 0;
+                const isCalculable = isFinite(magnification) && Math.abs(magnification) > 1e-8;
+
+                // 限制放大率
+                const MAX_MAGNIFICATION = 20;
+                let safe_magnification = magnification;
+                if (!isCalculable) safe_magnification = 0;
+                if (Math.abs(safe_magnification) > MAX_MAGNIFICATION) {
+                    safe_magnification = (safe_magnification >= 0) ? MAX_MAGNIFICATION : -MAX_MAGNIFICATION;
+                }
+
+                // 畫像（使用安全放大率）
+                if (isRealImage && isCalculable) {
+                    const H_for_image = OBJECT_HEIGHT * safe_magnification;
+                    mesh_image = createImage(drag_elements.screen.x, 0, H_for_image);
+                    scene.add(mesh_image);
+                    mesh_image.children.forEach(m => {
+                        const colorKey = m.userData.colorKey;
+                        m.visible = !!COLOR_VISIBILITY[colorKey];
+                    });
+                }
+
+                // 畫光線（若開啟）
+                if (COLOR_VISIBILITY.showRays) {
+                    LIGHT_CONFIG.forEach((config) => {
+                        const colorKey = config.key;
+                        if (!COLOR_VISIBILITY[colorKey]) return;
+
+                        const ray_color = config.color;
+                        const y_pos_source = config.y;
+                        const z_pos_source = config.z;
+
+                        let y_pos_image = 0, z_pos_image = 0;
+                        if (isCalculable) {
+                            y_pos_image = y_pos_source * -safe_magnification;
+                            z_pos_image = z_pos_source * -safe_magnification;
+                        }
+
+                        const ray = createRayLine(
+                            drag_elements.object.x, y_pos_source, z_pos_source,
+                            drag_elements.screen.x, y_pos_image, z_pos_image,
+                            ray_color
+                        );
+                        ray_lines.push(ray);
+                        scene.add(ray);
+                    });
+                }
+
+                // 最後同步拖曳物件位置
+                if (mesh_light_source) mesh_light_source.position.x = drag_elements.object.x;
+                if (mesh_pinhole_wall) mesh_pinhole_wall.position.x = drag_elements.pinhole.x;
+                if (mesh_screen_wall) mesh_screen_wall.position.x = drag_elements.screen.x;
+
+            } catch (e) {
+                console.error('updateSimulation 發生例外：', e);
+                showErrorOverlay('更新模擬時發生錯誤，請重新整理頁面');
+            } finally {
+                needsSimulationUpdate = false;
+            }
+        }
+
+        // 顯示錯誤覆蓋
+        function showErrorOverlay(msg) {
+            errorOverlay.style.display = 'block';
+            // 可加上 msg 顯示（目前 overlay 已有說明）
+            console.warn('模擬錯誤：', msg);
+        }
+
+        // --- UI 控制綁定 ---
         function setupUIControls() {
-            const handleCheckboxChange = (event) => {
+            function handleCheckboxChange(event) {
                 const id = event.target.id;
-                
                 if (id === 'showRays') {
-                    COLOR_VISIBILITY[id] = event.target.checked;
+                    COLOR_VISIBILITY.showRays = !!event.target.checked;
                 } else {
                     const key = id.replace('show', '').toLowerCase();
-                    COLOR_VISIBILITY[key] = event.target.checked;
+                    COLOR_VISIBILITY[key] = !!event.target.checked;
                 }
-                
-                // 重新運行模擬以更新場景
-                updateSimulation();
-            };
+                requestSimulationUpdate();
+            }
 
             document.getElementById('showRed').addEventListener('change', handleCheckboxChange);
             document.getElementById('showGreen').addEventListener('change', handleCheckboxChange);
             document.getElementById('showBlue').addEventListener('change', handleCheckboxChange);
-            document.getElementById('showRays').addEventListener('change', handleCheckboxChange); // 綁定光路開關
+            document.getElementById('showRays').addEventListener('change', handleCheckboxChange);
         }
 
-        // --- 3D 場景初始化 ---
+        // --- 初始化場景 ---
         function init() {
-            // 1. 場景
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xf0f0f0);
+            try {
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0xf0f0f0);
 
-            // 2. 相機
-            const aspect = window.innerWidth / window.innerHeight;
-            camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-            
-            // 調整相機位置，離場景遠一點，貼近 XY 平面
-            camera.position.set(-30, 5, 25); 
-            
-            // 3. 渲染器
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            container.appendChild(renderer.domElement);
+                const aspect = window.innerWidth / window.innerHeight;
+                camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
+                camera.position.set(-30, 5, 25);
 
-            // 4. 控制器 (啟用拖曳空間改變視角)
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true; 
-            controls.dampingFactor = 0.05;
-            controls.minDistance = 20;
-            controls.maxDistance = 100;
-            controls.target.set(0, 0, 0); 
-            controls.update(); 
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+                container.appendChild(renderer.domElement);
 
-            // 5. 建立核心 3D 物件
-            
-            const ambientLight = new THREE.AmbientLight(0x404040, 5);
-            scene.add(ambientLight);
+                // WebGL context lost / restored 處理
+                renderer.domElement.addEventListener('webglcontextlost', function (e) {
+                    e.preventDefault();
+                    console.error('WebGL context lost');
+                    showErrorOverlay('WebGL context lost（顯示進程異常）。');
+                }, false);
+                renderer.domElement.addEventListener('webglcontextrestored', function () {
+                    console.info('WebGL context restored');
+                    errorOverlay.style.display = 'none';
+                    // 重新初始化或重新載入頁面
+                    // location.reload(); // 可視情況啟用
+                }, false);
 
-            // 創建 THREE.Plane 作為不可見的拖曳參考平面 (Y=0)
-            drag_plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0); 
-            
-            // 軸線 (光軸 - X軸) - ***已移除基準線***
-            
-            // 物體 (RGB L 字型光源)
-            mesh_light_source = createLightSource(drag_elements.object.x, 0);
-            mesh_light_source.name = 'Draggable_Object';
-            scene.add(mesh_light_source);
+                controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.minDistance = 10;
+                controls.maxDistance = 200;
+                controls.target.set(0, 0, 0);
+                controls.update();
 
-            // 牆壁 (針孔與屏幕)
-            mesh_pinhole_wall = createWall(drag_elements.pinhole.x, 0xaeaeae, 20, 10); // 針孔牆：灰色 0xaeaeae, H=20, D=10
-            mesh_pinhole_wall.name = 'Draggable_Pinhole';
-            scene.add(mesh_pinhole_wall);
-            
-            mesh_screen_wall = createWall(drag_elements.screen.x, drag_elements.screen.color, 50, 30); // 屏幕牆：H=50, D=30
-            mesh_screen_wall.name = 'Draggable_Screen';
-            scene.add(mesh_screen_wall);
+                const ambientLight = new THREE.AmbientLight(0x404040, 5);
+                scene.add(ambientLight);
 
-            updateSimulation();
+                // 參考拖曳平面
+                drag_plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
-            // 6. 設定事件監聽器
-            window.addEventListener('resize', onWindowResize);
+                // 建立物件
+                mesh_light_source = createLightSource(drag_elements.object.x, 0);
+                mesh_light_source.name = 'Draggable_Object';
+                scene.add(mesh_light_source);
 
-            // 7. 啟用滑鼠/觸控拖曳物體功能
-            setupDragControls();
+                mesh_pinhole_wall = createWall(drag_elements.pinhole.x, 0xaeaeae, 20, 10);
+                mesh_pinhole_wall.name = 'Draggable_Pinhole';
+                scene.add(mesh_pinhole_wall);
 
-            // 8. 啟用 UI 控制
-            setupUIControls(); 
+                mesh_screen_wall = createWall(drag_elements.screen.x, drag_elements.screen.color, 50, 30);
+                mesh_screen_wall.name = 'Draggable_Screen';
+                scene.add(mesh_screen_wall);
+
+                setupDragControls();
+                setupUIControls();
+
+                // 首次要渲染一次（並執行模擬）
+                requestSimulationUpdate();
+
+                window.addEventListener('resize', onWindowResize);
+
+            } catch (e) {
+                console.error('init 發生錯誤：', e);
+                showErrorOverlay('初始化失敗，請檢查 console');
+            }
         }
 
-        // 響應視窗大小變更
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
+            if (renderer) renderer.setSize(window.innerWidth, window.innerHeight);
+            requestSimulationUpdate();
         }
 
-        // 3D 渲染迴圈
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update(); 
-            renderer.render(scene, camera);
-        }
-        
-        // --- 拖曳 3D 物體邏輯 (保持不變) ---
+        // --- 拖曳邏輯 ---
         function setupDragControls() {
             const raycaster = new THREE.Raycaster();
             const mouse = new THREE.Vector2();
             let isDragging = false;
             let selectedMesh = null;
             let offset = new THREE.Vector3();
-            const intersection = new THREE.Vector3(); 
+            const intersection = new THREE.Vector3();
 
-            const draggableMeshes = [mesh_light_source, mesh_pinhole_wall, mesh_screen_wall];
+            // note: draggableMeshes are the top-level objects (we will test with intersectObjects and then climb parents)
+            const draggableRoots = () => [mesh_light_source, mesh_pinhole_wall, mesh_screen_wall].filter(Boolean);
+
+            function getNormalizedMouse(event) {
+                // 支援 touch
+                const clientX = (event.touches && event.touches[0]) ? event.touches[0].clientX : event.clientX;
+                const clientY = (event.touches && event.touches[0]) ? event.touches[0].clientY : event.clientY;
+                mouse.x = (clientX / window.innerWidth) * 2 - 1;
+                mouse.y = - (clientY / window.innerHeight) * 2 + 1;
+            }
 
             function onPointerDown(event) {
-                if (event.button !== 0 && !event.touches) return; 
+                // 只接受左鍵或觸控
+                if (event.type === 'pointerdown' && event.button !== 0 && !event.touches) return;
 
-                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-                mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-
+                getNormalizedMouse(event);
                 raycaster.setFromCamera(mouse, camera);
-                
-                const intersects = raycaster.intersectObjects(draggableMeshes, true);
+
+                const roots = draggableRoots();
+                const intersects = raycaster.intersectObjects(roots, true);
 
                 if (intersects.length > 0) {
                     let target = intersects[0].object;
-                    while (target.parent && !target.name.startsWith('Draggable_')) {
+                    // 找到頂層 draggable root
+                    while (target && !target.name) {
                         target = target.parent;
                     }
-                    
+                    // climb until parent has a Draggable_ name
+                    while (target && !target.name.startsWith('Draggable_')) {
+                        target = target.parent;
+                    }
+                    if (!target) return;
+
                     selectedMesh = target;
-                    
-                    controls.enabled = false; 
+                    controls.enabled = false;
                     isDragging = true;
-                    
+
+                    // 計算 offset
                     raycaster.ray.intersectPlane(drag_plane, intersection);
                     offset.copy(intersection).sub(selectedMesh.position);
                     document.body.style.cursor = 'grabbing';
+
+                    event.preventDefault();
                 }
             }
 
             function onPointerMove(event) {
                 if (!isDragging || !selectedMesh) return;
-                
-                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-                mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-
+                getNormalizedMouse(event);
                 raycaster.setFromCamera(mouse, camera);
-                
+
                 if (raycaster.ray.intersectPlane(drag_plane, intersection)) {
-                    
-                    let newX = intersection.x - offset.x; 
-                    
-                    // 根據選定的 Mesh 應用拖曳範圍限制
-                    let limits = DRAG_LIMITS.object; // 預設光源
+                    let newX = intersection.x - offset.x;
+
+                    let limits = DRAG_LIMITS.object;
                     if (selectedMesh.name === 'Draggable_Pinhole') limits = DRAG_LIMITS.pinhole;
                     else if (selectedMesh.name === 'Draggable_Screen') limits = DRAG_LIMITS.screen;
-                    
-                    // 限制 X 座標
+
                     newX = Math.max(limits.min, Math.min(limits.max, newX));
 
                     selectedMesh.position.x = newX;
@@ -552,29 +568,56 @@
                     if (selectedMesh.name === 'Draggable_Object') drag_elements.object.x = newX;
                     else if (selectedMesh.name === 'Draggable_Pinhole') drag_elements.pinhole.x = newX;
                     else if (selectedMesh.name === 'Draggable_Screen') drag_elements.screen.x = newX;
-                    
-                    updateSimulation();
+
+                    requestSimulationUpdate();
                 }
             }
 
             function onPointerUp() {
                 if (isDragging) {
-                    controls.enabled = true; 
+                    controls.enabled = true;
                     isDragging = false;
                     selectedMesh = null;
                     document.body.style.cursor = 'grab';
                 }
             }
 
+            // 使用 pointer event 綁定（包含 touch）
             renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
-            renderer.domElement.addEventListener('pointermove', onPointerMove, false);
-            renderer.domElement.addEventListener('pointerup', onPointerUp, false);
+            window.addEventListener('pointermove', onPointerMove, false);
+            window.addEventListener('pointerup', onPointerUp, false);
+            // 若需要支援 touchend/touchmove 分別也已涵蓋在 pointer events
         }
 
-        window.onload = function() {
+        // --- 主渲染迴圈（包含 FPS 限制） ---
+        function animate(now) {
+            try {
+                requestAnimationFrame(animate);
+
+                // update controls damping
+                controls.update();
+
+                // 若需要執行模擬更新，先跑一次 updateSimulation（在 render 前讓畫面狀態一致）
+                if (needsSimulationUpdate) updateSimulation();
+
+                // 限制最大 FPS
+                if (!lastRenderTime) lastRenderTime = now;
+                const delta = now - lastRenderTime;
+                if (delta >= RENDER_INTERVAL) {
+                    renderer.render(scene, camera);
+                    lastRenderTime = now - (delta % RENDER_INTERVAL);
+                }
+            } catch (e) {
+                console.error('渲染迴圈發生錯誤：', e);
+                showErrorOverlay('渲染發生錯誤，請重新整理頁面或關閉硬體加速再試。');
+            }
+        }
+
+        // --- 啟動 ---
+        window.addEventListener('load', () => {
             init();
-            animate();
-        };
+            requestAnimationFrame(animate);
+        });
 
     </script>
 </body>
