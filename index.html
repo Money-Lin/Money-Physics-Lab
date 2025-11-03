@@ -43,6 +43,7 @@
     <div id="info">
         <h1>3D 針孔成像模擬器</h1>
         <div id="controls">
+            <!-- 已修正符號：D_物 -> p, D_像 -> q, H_像 -> h -->
             <p>使用滑鼠或手指拖曳空白處來改變視角。點擊光源/針孔/屏幕可以拖曳它在 X 軸上移動。</p>
             <p>物距 $p$ : <strong id="D_obj_display">--</strong> | 像距 $q$ : <strong id="D_img_display">--</strong> | 像高 $h$ : <strong id="H_img_display">--</strong> | 放大率 $M$ : <strong id="magnification_display">--</strong></p>
             
@@ -283,23 +284,33 @@
             return wall_mesh;
         }
 
-        // --- 核心更新邏輯 ---
+        // --- 核心更新邏輯 (已修復 NaN/Infinity 和釋放資源) ---
         function updateSimulation() {
             const result = calculateSimulation();
-            const magnification = result.M;
+            let magnification = result.M;
 
             updateInfo(result);
 
-            // 1. 移除舊的成像和光路
+            // 1. 移除舊的成像和光路並釋放資源 (防止 WebGL 崩潰)
             if (mesh_image) {
+                // 遞迴釋放幾何體和材質
+                mesh_image.traverse(obj => {
+                    if (obj.geometry) obj.geometry.dispose();
+                    if (obj.material) obj.material.dispose();
+                });
                 scene.remove(mesh_image);
+                mesh_image = null;
             }
-            ray_lines.forEach(ray => scene.remove(ray));
+            
+            ray_lines.forEach(ray => {
+                if (ray.geometry) ray.geometry.dispose();
+                if (ray.material) ray.material.dispose();
+                scene.remove(ray);
+            });
             ray_lines = [];
 
             // 2. 處理光源的顯示/隱藏
             if (mesh_light_source) {
-                // 確保光源的每個子物件的可見性與 checkbox 狀態同步
                 mesh_light_source.children.forEach(mesh => {
                     const colorKey = mesh.userData.colorKey;
                     mesh.visible = COLOR_VISIBILITY[colorKey];
@@ -308,12 +319,22 @@
 
             // 3. 繪製新的成像和光路
             const isRealImage = result.D_obj > 0 && result.D_img > 0;
+            const isCalculable = isFinite(magnification) && magnification > 0; 
+            
+            const MAX_MAGNIFICATION = 20; 
+            let safe_magnification = magnification;
 
-            if (isRealImage) {
-                // 繪製成像
+            if (magnification > MAX_MAGNIFICATION) {
+                 // 限制放大率用於幾何計算
+                 safe_magnification = MAX_MAGNIFICATION;
+            }
+
+
+            if (isRealImage && isCalculable) {
+                // 繪製成像 (使用箝制後的放大率進行大小計算)
                 mesh_image = createImage(
                     drag_elements.screen.x, 0,
-                    result.H_img
+                    OBJECT_HEIGHT * safe_magnification // 使用箝制後的像高
                 );
                 scene.add(mesh_image);
                 
@@ -325,12 +346,11 @@
             }
             
             // 繪製光路 (只有在總開關和顏色開關都打開時)
-            if (COLOR_VISIBILITY.showRays) { // NEW: 檢查光路總開關
+            if (COLOR_VISIBILITY.showRays) { 
                 LIGHT_CONFIG.forEach((config) => {
                     const colorKey = config.key;
 
                     if (!COLOR_VISIBILITY[colorKey]) {
-                        // 如果這個顏色被關閉了，跳過
                         return; 
                     }
 
@@ -340,13 +360,16 @@
                     
                     let y_pos_image, z_pos_image;
                     
-                    if (result.D_obj <= 0) {
+                    if (!isCalculable) { 
+                        // 如果放大率無效，光線會從物體發出，經過針孔，並延伸向 (0,0,0) 遠處
                         y_pos_image = 0; 
                         z_pos_image = 0;
                     } else {
-                        // 成像座標 (Y 和 Z 都需要反轉和縮放)
-                        y_pos_image = y_pos_source * -magnification; 
-                        z_pos_image = z_pos_source * -magnification; 
+                        // 使用計算出的（非箝制）或安全的放大率來計算光路終點，以保持光線直線。
+                        // 這裡使用 safe_magnification 確保幾何座標不會爆炸。
+                        
+                        y_pos_image = y_pos_source * -safe_magnification; 
+                        z_pos_image = z_pos_source * -safe_magnification; 
                     }
 
                     // 繪製光路
@@ -358,7 +381,7 @@
                     ray_lines.push(ray);
                     scene.add(ray);
                 });
-            } // END if (COLOR_VISIBILITY.showRays)
+            } 
 
 
             // 4. 調整可拖曳物體的位置 (不變)
@@ -371,14 +394,11 @@
         function setupUIControls() {
             const handleCheckboxChange = (event) => {
                 const id = event.target.id;
-                const key = id.replace('show', '').toLowerCase();
                 
-                // NEW: 修正大小寫問題
                 if (id === 'showRays') {
-                    // 確保 'showRays' 鍵名正確 (JS 區分大小寫)
-                    COLOR_VISIBILITY['showRays'] = event.target.checked;
+                    COLOR_VISIBILITY[id] = event.target.checked;
                 } else {
-                    // 處理紅、綠、藍
+                    const key = id.replace('show', '').toLowerCase();
                     COLOR_VISIBILITY[key] = event.target.checked;
                 }
                 
@@ -389,7 +409,7 @@
             document.getElementById('showRed').addEventListener('change', handleCheckboxChange);
             document.getElementById('showGreen').addEventListener('change', handleCheckboxChange);
             document.getElementById('showBlue').addEventListener('change', handleCheckboxChange);
-            document.getElementById('showRays').addEventListener('change', handleCheckboxChange); // NEW: 綁定光路開關
+            document.getElementById('showRays').addEventListener('change', handleCheckboxChange); // 綁定光路開關
         }
 
         // --- 3D 場景初始化 ---
@@ -559,5 +579,3 @@
     </script>
 </body>
 </html>
-
-
