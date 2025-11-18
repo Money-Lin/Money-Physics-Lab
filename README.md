@@ -1,1 +1,1 @@
-# pinhole-simulator
+# pinhole simulator
