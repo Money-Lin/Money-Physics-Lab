@@ -1,624 +1,803 @@
-<!-- 安全穩定版：3D 針孔成像模擬器（基於你提供的原始程式） -->
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
+
 <head>
     <meta charset="UTF-8">
     <title>3D 針孔成像模擬器</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: Arial, sans-serif; text-align: center; background-color: #eee; }
-        #info {
-            position: absolute;
-            top: 0;
-            width: 100%;
-            padding: 10px;
-            background: rgba(255, 255, 255, 0.9);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-            box-sizing: border-box;
-            z-index: 10;
-        }
-        #info h1 { margin: 0 0 5px 0; font-size: 1.2em; }
-        #controls { font-size: 0.9em; margin-top: 5px; pointer-events: auto; }
-        #ui-controls { margin-top: 10px; display: flex; justify-content: center; gap: 20px; }
-        #ui-controls label { cursor: pointer; user-select: none; }
-
-        #container {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            cursor: grab;
-        }
-        #container:active { cursor: grabbing; }
-
-        /* 當 WebGL 當掉時顯示覆蓋訊息 */
-        #errorOverlay {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255,255,255,0.95);
-            padding: 20px 28px;
-            border-radius: 8px;
-            box-shadow: 0 6px 24px rgba(0,0,0,0.2);
-            z-index: 999;
-            display: none;
-            font-family: Arial, sans-serif;
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #e0e0e0;
+            font-family: "Microsoft JhengHei", sans-serif;
             color: #333;
         }
-        #errorOverlay button { margin-top: 12px; }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            color: #333;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            pointer-events: auto;
+            user-select: none;
+            width: 280px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        h3 {
+            margin: 0 0 10px 0;
+            border-bottom: 1px solid #f0e8e8;
+            padding-bottom: 5px;
+            color: #222;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        h3 .toggle-arrow {
+            font-size: 12px;
+            color: #999;
+            transition: transform 0.2s;
+        }
+
+        h3:hover {
+            color: #0066cc;
+        }
+
+        h3:hover .toggle-arrow {
+            color: #0066cc;
+        }
+
+        .highlight {
+            color: #0066cc;
+            font-weight: bold;
+        }
+
+        .status {
+            color: #d32f2f;
+            font-weight: bold;
+            display: block;
+            margin-top: 5px;
+        }
+
+        .hint-text {
+            font-size: 14px;
+            color: #555;
+            line-height: 1.6;
+            margin-top: 15px;
+        }
+
+
+
+        input[type=checkbox] {
+            transform: scale(1.5);
+            margin-right: 10px;
+            cursor: pointer;
+        }
+
+        #resetBtn {
+            width: 100%;
+            padding: 8px;
+            background-color: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #333;
+            transition: background 0.2s;
+        }
+
+        #resetBtn:hover {
+            background-color: #e0e0e0;
+            border-color: #999;
+        }
+
+        .section-label {
+            font-size: 13px;
+            font-weight: bold;
+            color: #666;
+            margin-top: 12px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .led-toggle-row {
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .led-toggle-row input[type=checkbox] {
+            transform: scale(1.3);
+            margin-right: 8px;
+        }
+
+        .led-dot {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        #sourceMode,
+        #pinholeCount {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            font-family: inherit;
+            color: #333;
+            background: #f8f8f8;
+            cursor: pointer;
+            margin-bottom: 8px;
+        }
     </style>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
+
 <body>
 
-    <div id="container"></div>
-
     <div id="info">
-        <h1>3D 針孔成像模擬器</h1>
-        <div id="controls">
-            <p>使用滑鼠或手指拖曳空白處來改變視角。點擊光源/針孔/屏幕可以拖曳它在 X 軸上移動。</p>
-            <p>物距 $p$ : <strong id="D_obj_display">--</strong> | 像距 $q$ : <strong id="D_img_display">--</strong> | 像高 $h$ : <strong id="H_img_display">--</strong> | 放大率 $M$ : <strong id="magnification_display">--</strong></p>
-            <div id="ui-controls">
-                <label style="color: red;"><input type="checkbox" id="showRed" checked> 紅光 (R)</label>
-                <label style="color: green;"><input type="checkbox" id="showGreen" checked> 綠光 (G)</label>
-                <label style="color: blue;"><input type="checkbox" id="showBlue" checked> 藍光 (B)</label>
-                <label style="color: #555;"><input type="checkbox" id="showRays" checked> 顯示光路</label>
+        <h3 id="panelToggle">3D 針孔成像實驗室 <span class="toggle-arrow">▼</span></h3>
+
+        <div id="panelBody">
+            <div class="section-label">💡 光源模式</div>
+            <select id="sourceMode">
+                <option value="led3">三色 LED (紅藍綠)</option>
+                <option value="letterF">字母 F</option>
+            </select>
+
+            <div id="ledToggles">
+                <label class="led-toggle-row">
+                    <input type="checkbox" id="toggleRed" checked>
+                    <span class="led-dot" style="background:#ff0000;"></span>
+                    <span>紅色 LED</span>
+                </label>
+                <label class="led-toggle-row">
+                    <input type="checkbox" id="toggleBlue" checked>
+                    <span class="led-dot" style="background:#0000ff;"></span>
+                    <span>藍色 LED</span>
+                </label>
+                <label class="led-toggle-row">
+                    <input type="checkbox" id="toggleGreen" checked>
+                    <span class="led-dot" style="background:#4da72e;"></span>
+                    <span>綠色 LED</span>
+                </label>
+            </div>
+
+            <div class="section-label">📌 針孔設定</div>
+            <select id="pinholeCount">
+                <option value="1">1 個針孔</option>
+                <option value="2">2 個針孔</option>
+                <option value="3">3 個針孔</option>
+            </select>
+
+
+
+            <button id="resetBtn">↺ 重置位置</button>
+
+            <div class="hint-text">
+                1. <span class="highlight">拖曳</span> 懸浮組件 (僅限X軸)<br>
+                2. <span class="highlight">視角</span> 按住左鍵旋轉<br>
+                <br>
+                <span id="debugText">系統就緒</span><br>
+                <span id="dragStatus" class="status"></span>
             </div>
         </div>
     </div>
 
-    <div id="errorOverlay">
-        <div><strong>⚠️ WebGL 或渲染進程發生錯誤</strong></div>
-        <div style="margin-top:8px;">若畫面停止更新，請點「重新載入」或關閉硬體加速後重試。</div>
-        <div style="margin-top:12px;">
-            <button id="reloadBtn">重新載入頁面</button>
-        </div>
-    </div>
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-    <!-- three.js r128 (非 module 版本，方便直接 file:// 使用) -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-    <script>
-        // MathJax 設定
-        window.MathJax = {
-            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }
+        // ==========================================
+        // 🔧 參數設定區 (XYZ 自由配置)
+        // ==========================================
+        const CONFIG = {
+            // [位置設定 - X軸] (前後距離)
+            posX_Source: -80,
+            posX_Pinhole: 0,
+            posX_Screen: 100,
+
+            // [位置設定 - Y軸] (垂直高度)
+            posY_Source: 40,
+            posY_Pinhole: 40,
+            posY_Screen: 40,
+
+            // [位置設定 - Z軸] (左右偏移，正值為畫面內/左，負值為畫面外/右)
+            // 您可以在這裡設定 Z 軸錯位
+            posZ_Source: 0,
+            posZ_Pinhole: 0,
+            posZ_Screen: -20,
+
+            // [尺寸設定]
+            screenWidth: 160,
+            screenHeight: 240,
+            wallSize: 60,
+            pinholeSpacing: 15,  // 多針孔間距 (Z軸)
+
+            floorY: -30,
+
+            ledSpacing: 16,
+            ledRadius: 4,
+            colorRed: 0xff0000,
+            colorBlue: 0x0000ff,
+            colorGreen: 0x4da72e,
+
+            // 字母 F 模式
+            fDotRadius: 2.5,
+            fSpacing: 8,
+            colorF: 0xffcc00
         };
-        // --- 基本設定與變數 ---
-        let scene, camera, renderer, controls;
-        const container = document.getElementById('container');
 
-        const SPHERE_RADIUS = 0.8;
-        const SPACING = 3;
-        const HALF_SPACING = SPACING / 2;
+        // 1. 場景設置
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0xe0e0e0);
 
-        const COLOR_VISIBILITY = { red: true, green: true, blue: true, showRays: true };
+        const gridHelper = new THREE.GridHelper(500, 50, 0x888888, 0xbbbbbb);
+        gridHelper.position.y = CONFIG.floorY;
+        scene.add(gridHelper);
 
-        const LIGHT_CONFIG = [
-            { color: 0xff0000, y: -HALF_SPACING, z: HALF_SPACING, key: 'red' },
-            { color: 0x4da72e, y: -HALF_SPACING, z: -HALF_SPACING, key: 'green' },
-            { color: 0x0000ff, y: HALF_SPACING, z: HALF_SPACING, key: 'blue' }
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+        camera.position.set(60, 140, 300);
+        camera.lookAt(0, CONFIG.posY_Pinhole, 0);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const ambientLight = new THREE.AmbientLight(0xcccccc);
+        scene.add(ambientLight);
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        dirLight.position.set(50, 150, 50);
+        scene.add(dirLight);
+
+        // --- 材質定義 ---
+        const matWall = new THREE.MeshLambertMaterial({
+            color: 0x999999,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.7,
+            depthWrite: false
+        });
+
+        const matScreen = new THREE.MeshLambertMaterial({
+            color: 0xfad5be,
+            side: THREE.DoubleSide,
+            transparent: true,
+            opacity: 0.3,
+            depthWrite: false
+        });
+
+        function createHitBox(w, h, d) {
+            const geo = new THREE.BoxGeometry(w, h, d);
+            const mat = new THREE.MeshBasicMaterial({ visible: false });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.userData = { isHitBox: true };
+            return mesh;
+        }
+
+        // --- 建立物件群組 ---
+
+        // A. 光源組
+        const sourceGroup = new THREE.Group();
+        // 使用 CONFIG 中的 X, Y, Z
+        sourceGroup.position.set(CONFIG.posX_Source, CONFIG.posY_Source, CONFIG.posZ_Source);
+        sourceGroup.userData = { name: "光源 (Object)" };
+        scene.add(sourceGroup);
+        sourceGroup.add(createHitBox(20, 60, 60));
+
+        function createLED(color, x, y, z) {
+            const geo = new THREE.SphereGeometry(CONFIG.ledRadius, 32, 32);
+            const mat = new THREE.MeshBasicMaterial({ color: color });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(x, y, z);
+            mesh.add(new THREE.PointLight(color, 3, 100));
+            return mesh;
+        }
+        const redLED = createLED(CONFIG.colorRed, 0, 0, 0);
+        const blueLED = createLED(CONFIG.colorBlue, 0, CONFIG.ledSpacing, 0);
+        const greenLED = createLED(CONFIG.colorGreen, 0, 0, CONFIG.ledSpacing);
+        sourceGroup.add(redLED, blueLED, greenLED);
+
+        // --- 字母 F 光源 ---
+        // F 形狀定義 (行, 列) - 5 行 x 4 列
+        // # # # #   (row 4, 頂部)
+        // #           (row 3)
+        // # # #       (row 2, 中間)
+        // #           (row 1)
+        // #           (row 0, 底部)
+        const F_SHAPE = [
+            [0, 0], [1, 0], [2, 0], [2, 1], [2, 2],
+            [3, 0], [4, 0], [4, 1], [4, 2], [4, 3]
         ];
+        const fCenterY = 2 * CONFIG.fSpacing;
+        const fCenterZ = 1.5 * CONFIG.fSpacing;
 
-        const OBJECT_HEIGHT = SPACING;
+        const fLEDs = [];
+        const fGroup = new THREE.Group();
+        fGroup.visible = false;
 
-        const DRAG_LIMITS = {
-            object: { min: -35, max: -2 },
-            pinhole: { min: -10, max: 10 },
-            screen: { min: 2, max: 35 }
-        };
-
-        const INITIAL_DISTANCES = {
-            object_dist_neg: -15,
-            pinhole_dist: 0,
-            screen_dist_pos: 15
-        };
-
-        let drag_elements = {
-            object: { x: INITIAL_DISTANCES.object_dist_neg, color: 0xcccccc },
-            pinhole: { x: INITIAL_DISTANCES.pinhole_dist, color: 0xffffff },
-            screen: { x: INITIAL_DISTANCES.screen_dist_pos, color: 0xfad5be }
-        };
-
-        // 3D 物件
-        let mesh_light_source = null;
-        let mesh_image = null;
-        let mesh_pinhole_wall = null, mesh_screen_wall = null;
-        let ray_lines = [];
-        let drag_plane = null;
-
-        // 更新節流（防抖）
-        let needsSimulationUpdate = false;
-        function requestSimulationUpdate() {
-            needsSimulationUpdate = true;
+        function createFDot(y, z) {
+            const geo = new THREE.SphereGeometry(CONFIG.fDotRadius, 16, 16);
+            const mat = new THREE.MeshBasicMaterial({ color: CONFIG.colorF });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(0, y, z);
+            mesh.add(new THREE.PointLight(CONFIG.colorF, 1, 60));
+            return mesh;
         }
 
-        // Render FPS 上限（避免 GPU 過熱/崩潰）
-        const RENDER_FPS = 30;
-        const RENDER_INTERVAL = 1000 / RENDER_FPS;
-        let lastRenderTime = 0;
+        F_SHAPE.forEach(([row, col]) => {
+            const y = row * CONFIG.fSpacing - fCenterY;
+            const z = col * CONFIG.fSpacing - fCenterZ;
+            const dot = createFDot(y, z);
+            fGroup.add(dot);
+            fLEDs.push(dot);
+        });
+        sourceGroup.add(fGroup);
 
-        // 錯誤覆蓋
-        const errorOverlay = document.getElementById('errorOverlay');
-        const reloadBtn = document.getElementById('reloadBtn');
-        reloadBtn.addEventListener('click', () => location.reload());
 
-        // --- 資訊面板更新 ---
-        function updateInfo(result) {
-            const D_obj_display = document.getElementById('D_obj_display');
-            const D_img_display = document.getElementById('D_img_display');
-            const H_img_display = document.getElementById('H_img_display');
-            const magnification_display = document.getElementById('magnification_display');
+        // B. 針孔組
+        const pinholeGroup = new THREE.Group();
+        pinholeGroup.position.set(CONFIG.posX_Pinhole, CONFIG.posY_Pinhole, CONFIG.posZ_Pinhole);
+        pinholeGroup.userData = { name: "針孔 (Pinhole)" };
+        scene.add(pinholeGroup);
+        pinholeGroup.add(createHitBox(10, CONFIG.wallSize, CONFIG.wallSize));
 
-            if (result.error) {
-                D_obj_display.textContent = result.error;
-                D_obj_display.style.color = 'red';
-                D_img_display.textContent = '--';
-                H_img_display.textContent = '--';
-                magnification_display.textContent = '--';
+        const wall = new THREE.Mesh(new THREE.BoxGeometry(2, CONFIG.wallSize, CONFIG.wallSize), matWall);
+        pinholeGroup.add(wall);
+
+        const holeRadius = 0.5;
+        // 建立 3 個針孔 (holeTube)，根據選擇顯示 1~3 個
+        const MAX_PINHOLES = 3;
+        const holeTubes = [];
+        const pinholeZOffsets = [0, -CONFIG.pinholeSpacing, CONFIG.pinholeSpacing]; // 中、左、右
+        for (let p = 0; p < MAX_PINHOLES; p++) {
+            const tube = new THREE.Mesh(
+                new THREE.CylinderGeometry(holeRadius, holeRadius, 2.2, 32),
+                new THREE.MeshBasicMaterial({ color: 0xffffff })
+            );
+            tube.rotation.z = Math.PI / 2;
+            tube.position.z = pinholeZOffsets[p];
+            tube.visible = (p === 0); // 預設只顯示第 1 個
+            pinholeGroup.add(tube);
+            holeTubes.push(tube);
+        }
+
+
+        // C. 屏幕組
+        const screenGroup = new THREE.Group();
+        screenGroup.position.set(CONFIG.posX_Screen, CONFIG.posY_Screen, CONFIG.posZ_Screen);
+        screenGroup.userData = { name: "屏幕 (Screen)" };
+        scene.add(screenGroup);
+        screenGroup.add(createHitBox(10, CONFIG.screenHeight, CONFIG.screenWidth));
+
+        const screenPlate = new THREE.Mesh(new THREE.BoxGeometry(2, CONFIG.screenHeight, CONFIG.screenWidth), matScreen);
+        screenGroup.add(screenPlate);
+
+        // 平面成像點 (Ghosts)
+        function createGhost(color) {
+            const geo = new THREE.CircleGeometry(CONFIG.ledRadius, 32);
+            const mat = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.9,
+                side: THREE.DoubleSide,
+                depthTest: true,
+                depthWrite: true
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.y = -Math.PI / 2;
+            mesh.renderOrder = 2;
+            return mesh;
+        }
+        // 為每個針孔建立一組 ghost (3色LED用 + 字母F用)
+        // ghosts3LED[p] = { red, blue, green }  (p = 針孔索引)
+        // ghostsF[p] = [ghost0, ghost1, ... ghost9]
+        const ghosts3LED = [];
+        const ghostsF = [];
+
+        function createFGhost() {
+            const geo = new THREE.CircleGeometry(CONFIG.fDotRadius, 16);
+            const mat = new THREE.MeshBasicMaterial({
+                color: CONFIG.colorF,
+                transparent: true,
+                opacity: 0.9,
+                side: THREE.DoubleSide,
+                depthTest: true,
+                depthWrite: true
+            });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.rotation.y = -Math.PI / 2;
+            mesh.renderOrder = 2;
+            mesh.visible = false;
+            return mesh;
+        }
+
+        for (let p = 0; p < MAX_PINHOLES; p++) {
+            const rg = createGhost(CONFIG.colorRed);
+            const bg = createGhost(CONFIG.colorBlue);
+            const gg = createGhost(CONFIG.colorGreen);
+            if (p > 0) { rg.visible = false; bg.visible = false; gg.visible = false; }
+            screenGroup.add(rg, bg, gg);
+            ghosts3LED.push({ red: rg, blue: bg, green: gg });
+
+            const fSet = F_SHAPE.map(() => { const g = createFGhost(); screenGroup.add(g); return g; });
+            ghostsF.push(fSet);
+        }
+
+
+        // ==========================================
+        // 🔦 光路系統
+        // ==========================================
+
+        const rayMatBase = {
+            transparent: true,
+            opacity: 0.8,
+            linewidth: 2,
+            depthTest: false
+        };
+        const rayMatRed = new THREE.LineBasicMaterial({ color: CONFIG.colorRed, ...rayMatBase });
+        const rayMatBlue = new THREE.LineBasicMaterial({ color: CONFIG.colorBlue, ...rayMatBase });
+        const rayMatGreen = new THREE.LineBasicMaterial({ color: CONFIG.colorGreen, ...rayMatBase });
+        const rayMatF = new THREE.LineBasicMaterial({ color: CONFIG.colorF, ...rayMatBase });
+
+        function createRay(mat) {
+            const line = new THREE.Line(new THREE.BufferGeometry(), mat);
+            line.renderOrder = 1;
+            scene.add(line);
+            return line;
+        }
+        // 為每個針孔建立一組 ray
+        // rays3LED[p] = { red, blue, green }
+        // raysF[p] = [ray0..ray9]
+        const rays3LED = [];
+        const raysF = [];
+
+        for (let p = 0; p < MAX_PINHOLES; p++) {
+            rays3LED.push({
+                red: createRay(rayMatRed),
+                blue: createRay(rayMatBlue),
+                green: createRay(rayMatGreen)
+            });
+            const fRaySet = F_SHAPE.map(() => createRay(rayMatF));
+            fRaySet.forEach(r => r.visible = false);
+            raysF.push(fRaySet);
+        }
+
+
+        // --- 互動與控制 ---
+
+        const orbitControls = new OrbitControls(camera, renderer.domElement);
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+        // 拖曳平面 (高度設為針孔高度，以保證操作手感)
+        const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -CONFIG.posY_Pinhole);
+
+        let isDragging = false;
+        let selectedGroup = null;
+        let dragOffset = 0;
+        const debugText = document.getElementById('debugText');
+        const dragStatus = document.getElementById('dragStatus');
+
+        // 面板收合/展開
+        const panelToggle = document.getElementById('panelToggle');
+        const panelBody = document.getElementById('panelBody');
+        const toggleArrow = panelToggle.querySelector('.toggle-arrow');
+        panelToggle.addEventListener('click', () => {
+            const isHidden = panelBody.style.display === 'none';
+            panelBody.style.display = isHidden ? 'block' : 'none';
+            toggleArrow.textContent = isHidden ? '▼' : '▶';
+        });
+
+        const resetBtn = document.getElementById('resetBtn');
+        const toggleRed = document.getElementById('toggleRed');
+        const toggleBlue = document.getElementById('toggleBlue');
+        const toggleGreen = document.getElementById('toggleGreen');
+        const sourceModeSelect = document.getElementById('sourceMode');
+        const ledTogglesDiv = document.getElementById('ledToggles');
+        const pinholeCountSelect = document.getElementById('pinholeCount');
+
+        // 光源模式切換
+        sourceModeSelect.addEventListener('change', () => {
+            const isF = sourceModeSelect.value === 'letterF';
+            ledTogglesDiv.style.display = isF ? 'none' : 'block';
+            switchSourceMode(isF);
+        });
+
+        function switchSourceMode(isF) {
+            // 切換三色 LED vs 字母 F
+            redLED.visible = !isF;
+            blueLED.visible = !isF;
+            greenLED.visible = !isF;
+            fGroup.visible = isF;
+            updateSystem();
+        }
+
+        // 針孔數量切換
+        pinholeCountSelect.addEventListener('change', () => {
+            const count = parseInt(pinholeCountSelect.value);
+            for (let p = 0; p < MAX_PINHOLES; p++) {
+                holeTubes[p].visible = (p < count);
+            }
+            updateSystem();
+        });
+
+        // 燈光開關事件
+        toggleRed.addEventListener('change', updateSystem);
+        toggleBlue.addEventListener('change', updateSystem);
+        toggleGreen.addEventListener('change', updateSystem);
+
+        resetBtn.addEventListener('click', () => {
+            // 重置為 CONFIG 設定值
+            sourceGroup.position.set(CONFIG.posX_Source, CONFIG.posY_Source, CONFIG.posZ_Source);
+            pinholeGroup.position.set(CONFIG.posX_Pinhole, CONFIG.posY_Pinhole, CONFIG.posZ_Pinhole);
+            screenGroup.position.set(CONFIG.posX_Screen, CONFIG.posY_Screen, CONFIG.posZ_Screen);
+            updateSystem();
+            dragStatus.innerText = "已重置位置";
+            setTimeout(() => dragStatus.innerText = "", 1000);
+        });
+
+
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mousedown', onMouseDown);
+        window.addEventListener('mouseup', onMouseUp);
+
+        function getIntersects(event) {
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+            raycaster.setFromCamera(mouse, camera);
+            const objectsToCheck = [...sourceGroup.children, ...pinholeGroup.children, ...screenGroup.children];
+            return raycaster.intersectObjects(objectsToCheck, true);
+        }
+
+        function onMouseDown(event) {
+            const intersects = getIntersects(event);
+            if (intersects.length > 0) {
+                let target = intersects[0].object;
+                while (target.parent && target.parent !== scene) {
+                    if (target.parent === sourceGroup || target.parent === pinholeGroup || target.parent === screenGroup) {
+                        target = target.parent;
+                        break;
+                    }
+                    target = target.parent;
+                }
+                if (target === sourceGroup || target === pinholeGroup || target === screenGroup) {
+                    isDragging = true;
+                    selectedGroup = target;
+                    orbitControls.enabled = false;
+                    const planeIntersect = new THREE.Vector3();
+                    raycaster.ray.intersectPlane(dragPlane, planeIntersect);
+                    dragOffset = selectedGroup.position.x - planeIntersect.x;
+                    dragStatus.innerText = `正在拖曳: ${selectedGroup.userData.name}`;
+                    document.body.style.cursor = 'grabbing';
+                }
+            }
+        }
+
+        function onMouseMove(event) {
+            if (isDragging && selectedGroup) {
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                const planeIntersect = new THREE.Vector3();
+                if (raycaster.ray.intersectPlane(dragPlane, planeIntersect)) {
+                    let newX = planeIntersect.x + dragOffset;
+                    const minGap = 12;
+
+                    // 拖曳邏輯：只改變 X 軸，保持 Y 和 Z 不變
+                    if (selectedGroup === sourceGroup) {
+                        const limit = pinholeGroup.position.x - minGap;
+                        if (newX > limit) newX = limit;
+                        sourceGroup.position.x = newX;
+                    } else if (selectedGroup === pinholeGroup) {
+                        const leftLimit = sourceGroup.position.x + minGap;
+                        const rightLimit = screenGroup.position.x - minGap;
+                        if (newX < leftLimit) newX = leftLimit;
+                        if (newX > rightLimit) newX = rightLimit;
+                        pinholeGroup.position.x = newX;
+                    } else if (selectedGroup === screenGroup) {
+                        const limit = pinholeGroup.position.x + minGap;
+                        if (newX < limit) newX = limit;
+                        screenGroup.position.x = newX;
+                    }
+                    updateSystem();
+                }
             } else {
-                D_obj_display.textContent = result.D_obj.toFixed(1);
-                D_obj_display.style.color = 'black';
-                D_img_display.textContent = result.D_img.toFixed(1);
-                H_img_display.textContent = result.H_img.toFixed(1);
-                magnification_display.textContent = result.M.toFixed(2);
-            }
-            
-            if (window.MathJax && MathJax.typesetPromise) {
-                MathJax.typesetPromise([document.getElementById('controls')]);
+                const intersects = getIntersects(event);
+                if (intersects.length > 0) document.body.style.cursor = 'grab';
+                else document.body.style.cursor = 'default';
             }
         }
-        
+
+        function onMouseUp() {
+            isDragging = false; selectedGroup = null; orbitControls.enabled = true;
+            dragStatus.innerText = ""; document.body.style.cursor = 'default';
+        }
 
 
-        // --- 計算函式（物距、像距、放大率） ---
-        function calculateSimulation() {
-            const D_obj = drag_elements.pinhole.x - drag_elements.object.x;
-            const D_img = drag_elements.screen.x - drag_elements.pinhole.x;
+        // --- 物理系統更新 (XYZ 全方位修正，支援多針孔) ---
+        function updateSystem() {
+            const xSrc = sourceGroup.position.x;
+            const xPin = pinholeGroup.position.x;
+            const xScr = screenGroup.position.x;
 
-            let magnification = 0;
-            let error = '';
+            const ySrc = sourceGroup.position.y;
+            const yPin = pinholeGroup.position.y;
+            const yScr = screenGroup.position.y;
 
-            if (D_obj <= 0) {
-                error = `⚠️ 光源必須在針孔左側 (物距 > 0)。`;
-            } else if (D_img <= 0) {
-                error = `⚠️ 屏幕必須在針孔右側 (像距 > 0)。`;
-            } else if (D_obj <= 1) {
-                error = `⚠️ 物距必須大於 1。`;
-            } else if (D_img <= 1) {
-                error = `⚠️ 像距必須大於 1。`;
-            } else {
-                magnification = D_img / D_obj;
+            const zSrc = sourceGroup.position.z;
+            const zPin = pinholeGroup.position.z;
+            const zScr = screenGroup.position.z;
+
+            const do_dist = xPin - xSrc;
+            const di_dist = xScr - xPin;
+
+            if (do_dist <= 0.1) return;
+
+            const M = di_dist / do_dist;
+            const activePinholes = parseInt(pinholeCountSelect.value);
+
+            debugText.innerHTML = `物距: ${do_dist.toFixed(0)} | 像距: ${di_dist.toFixed(0)} | 放大率: ${M.toFixed(2)}X | 針孔: ${activePinholes}`;
+
+            const ghostScale = M;
+            const isF = sourceModeSelect.value === 'letterF';
+
+            // 控制 LED 球體本身的可見性
+            redLED.visible = !isF && toggleRed.checked;
+            blueLED.visible = !isF && toggleBlue.checked;
+            greenLED.visible = !isF && toggleGreen.checked;
+            fGroup.visible = isF;
+
+            // 輔助函式：計算某個 LED 通過某個針孔在屏幕上的投影位置
+            // ledWorldPos: LED 的世界座標
+            // pinWorldPos: 針孔的世界座標
+            // 回傳: 在 screenGroup 本地座標系中的 (y, z) 偏移
+            function calcProjection(ledWorldY, ledWorldZ, pinWorldY, pinWorldZ) {
+                const slopeY = (pinWorldY - ledWorldY) / do_dist;
+                const projY = pinWorldY + slopeY * di_dist;
+                const slopeZ = (pinWorldZ - ledWorldZ) / do_dist;
+                const projZ = pinWorldZ + slopeZ * di_dist;
+                return {
+                    y: projY - yScr,
+                    z: projZ - zScr
+                };
             }
 
-            const image_height_range = OBJECT_HEIGHT * magnification;
-
-            return { D_obj, D_img, H_img: image_height_range, M: magnification, error };
-        }
-
-        // --- 建立物件的 helper ---
-        function createLightSource(x, z_offset) {
-            const group = new THREE.Group();
-            const sphere_geo = new THREE.SphereGeometry(SPHERE_RADIUS, 16, 16);
-
-            LIGHT_CONFIG.forEach((config) => {
-                const mat = new THREE.MeshBasicMaterial({ color: config.color });
-                const mesh = new THREE.Mesh(sphere_geo, mat);
-                mesh.position.set(0, config.y, config.z);
-                mesh.userData.colorKey = config.key;
-                group.add(mesh);
-            });
-
-            group.position.set(x, 0, z_offset);
-            return group;
-        }
-
-        function createImage(x, z_offset, H_img) {
-            const group = new THREE.Group();
-
-            // 防止負或零半徑
-            const magnification = (OBJECT_HEIGHT === 0) ? 0 : (H_img / OBJECT_HEIGHT);
-            const safeMagn = (isFinite(magnification) && Math.abs(magnification) > 1e-8) ? magnification : 0;
-            const image_radius = Math.max(0.001, SPHERE_RADIUS * Math.abs(safeMagn));
-
-            const plane_geometry = new THREE.CircleGeometry(image_radius, 32);
-
-            LIGHT_CONFIG.forEach((config) => {
-                const color = config.color;
-                const y_pos_source = config.y;
-                const z_pos_source = config.z;
-
-                const y_pos_image = y_pos_source * -safeMagn;
-                const z_pos_image = z_pos_source * -safeMagn;
-
-                const mat = new THREE.MeshBasicMaterial({ color: color, side: THREE.DoubleSide });
-                const mesh = new THREE.Mesh(plane_geometry, mat);
-                mesh.rotation.y = Math.PI / 2;
-                mesh.position.set(0.1, y_pos_image, z_pos_image);
-                mesh.userData.colorKey = config.key;
-                group.add(mesh);
-            });
-
-            group.position.set(x, 0, z_offset);
-            return group;
-        }
-
-        function createRayLine(start_x, start_y, start_z, end_x, end_y, end_z, color) {
-            const pinhole_x = drag_elements.pinhole.x;
-
-            const p_start = new THREE.Vector3(start_x, start_y, start_z);
-            const p_pinhole = new THREE.Vector3(pinhole_x, 0, 0);
-            const p_end = new THREE.Vector3(end_x, end_y, end_z);
-
-            const v_ray = p_end.clone().sub(p_pinhole);
-
-            const EXTENSION_FACTOR = 15;
-            const p_extended = p_pinhole.clone().add(v_ray.clone().multiplyScalar(EXTENSION_FACTOR));
-
-            const points = [p_start, p_pinhole, p_extended];
-
-            const geometry = new THREE.BufferGeometry().setFromPoints(points);
-            const material = new THREE.LineBasicMaterial({ color: color, linewidth: 2 });
-            return new THREE.Line(geometry, material);
-        }
-
-        function createWall(x, color, height, depth) {
-            const wall_thickness = 0.5;
-            const wall_geo = new THREE.BoxGeometry(wall_thickness, height, depth);
-            const wall_mat = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 0.6 });
-            const wall_mesh = new THREE.Mesh(wall_geo, wall_mat);
-            wall_mesh.position.set(x, 0, 0);
-
-            // 標記針孔中心（以 pinhole 的當前 x 比對）
-            if (Math.abs(x - drag_elements.pinhole.x) < 1e-6) {
-                const center_geo = new THREE.SphereGeometry(0.2, 8, 8);
-                const center_mat = new THREE.MeshBasicMaterial({ color: 0x000000 });
-                const center_mesh = new THREE.Mesh(center_geo, center_mat);
-                center_mesh.position.set(0, 0, 0);
-                wall_mesh.add(center_mesh);
+            function updateOptics(rayLine, ledObj, ghostObj, pinPos) {
+                const ledPos = new THREE.Vector3();
+                const ghostPos = new THREE.Vector3();
+                ledObj.getWorldPosition(ledPos);
+                ghostObj.getWorldPosition(ghostPos);
+                rayLine.visible = true;
+                rayLine.geometry.setFromPoints([ledPos, ghostPos]);
             }
 
-            return wall_mesh;
-        }
+            function hideRay(ray) {
+                ray.visible = false;
+            }
 
-        // --- 釋放資源的輔助（用於安全清理） ---
-        function disposeObjectRecursively(obj) {
-            obj.traverse(o => {
-                if (o.geometry) {
-                    try { o.geometry.dispose(); } catch (e) {}
-                }
-                if (o.material) {
-                    // material 可能是陣列或單一
-                    try {
-                        if (Array.isArray(o.material)) {
-                            o.material.forEach(m => { if (m) m.dispose(); });
-                        } else {
-                            o.material.dispose();
+            // 逐針孔處理
+            for (let p = 0; p < MAX_PINHOLES; p++) {
+                const isActive = p < activePinholes;
+                const pinPos = new THREE.Vector3();
+                if (isActive) holeTubes[p].getWorldPosition(pinPos);
+
+                const pinWorldY = isActive ? pinPos.y : 0;
+                const pinWorldZ = isActive ? pinPos.z : 0;
+
+                if (!isF) {
+                    // ========== 三色 LED 模式 ==========
+                    const g = ghosts3LED[p];
+                    const r = rays3LED[p];
+
+                    if (!isActive) {
+                        g.red.visible = false; g.blue.visible = false; g.green.visible = false;
+                        hideRay(r.red); hideRay(r.blue); hideRay(r.green);
+                    } else {
+                        const redLedWorldY = ySrc;
+                        const redLedWorldZ = zSrc;
+                        const blueLedWorldY = ySrc + CONFIG.ledSpacing;
+                        const blueLedWorldZ = zSrc;
+                        const greenLedWorldY = ySrc;
+                        const greenLedWorldZ = zSrc + CONFIG.ledSpacing;
+
+                        const projRed = calcProjection(redLedWorldY, redLedWorldZ, pinWorldY, pinWorldZ);
+                        const projBlue = calcProjection(blueLedWorldY, blueLedWorldZ, pinWorldY, pinWorldZ);
+                        const projGreen = calcProjection(greenLedWorldY, greenLedWorldZ, pinWorldY, pinWorldZ);
+
+                        g.red.position.set(-2.0, projRed.y, projRed.z);
+                        g.red.scale.set(ghostScale, ghostScale, 1);
+                        g.blue.position.set(-2.0, projBlue.y, projBlue.z);
+                        g.blue.scale.set(ghostScale, ghostScale, 1);
+                        g.green.position.set(-2.0, projGreen.y, projGreen.z);
+                        g.green.scale.set(ghostScale, ghostScale, 1);
+
+                        // LED 開關
+                        function setVis(enabled, ghost, ray) {
+                            ghost.visible = enabled;
+                            if (!enabled) hideRay(ray);
                         }
-                    } catch (e) {}
-                }
-            });
-        }
+                        setVis(toggleRed.checked, g.red, r.red);
+                        setVis(toggleBlue.checked, g.blue, r.blue);
+                        setVis(toggleGreen.checked, g.green, r.green);
 
-        // --- 主要更新邏輯（僅在 requestSimulationUpdate 時執行） ---
-        function updateSimulation() {
-            try {
-                const result = calculateSimulation();
-                let magnification = result.M;
+                        if (toggleRed.checked) updateOptics(r.red, redLED, g.red, pinPos);
+                        if (toggleBlue.checked) updateOptics(r.blue, blueLED, g.blue, pinPos);
+                        if (toggleGreen.checked) updateOptics(r.green, greenLED, g.green, pinPos);
+                    }
 
-                updateInfo(result);
+                    // 隱藏此針孔的 F 模式元素
+                    ghostsF[p].forEach(g => g.visible = false);
+                    raysF[p].forEach(r => r.visible = false);
 
-                // 清理舊成像
-                if (mesh_image) {
-                    disposeObjectRecursively(mesh_image);
-                    scene.remove(mesh_image);
-                    mesh_image = null;
-                }
-
-                // 清理舊光線
-                ray_lines.forEach(ray => {
-                    try { if (ray.geometry) ray.geometry.dispose(); } catch(e) {}
-                    try { if (ray.material) ray.material.dispose(); } catch(e) {}
-                    scene.remove(ray);
-                });
-                ray_lines = [];
-
-                // 更新光源可見性
-                if (mesh_light_source) {
-                    mesh_light_source.children.forEach(mesh => {
-                        const colorKey = mesh.userData.colorKey;
-                        mesh.visible = !!COLOR_VISIBILITY[colorKey];
-                    });
-                }
-
-                const isRealImage = result.D_obj > 0 && result.D_img > 0;
-                const isCalculable = isFinite(magnification) && Math.abs(magnification) > 1e-8;
-
-                // 限制放大率
-                const MAX_MAGNIFICATION = 20;
-                let safe_magnification = magnification;
-                if (!isCalculable) safe_magnification = 0;
-                if (Math.abs(safe_magnification) > MAX_MAGNIFICATION) {
-                    safe_magnification = (safe_magnification >= 0) ? MAX_MAGNIFICATION : -MAX_MAGNIFICATION;
-                }
-
-                // 畫像（使用安全放大率）
-                if (isRealImage && isCalculable) {
-                    const H_for_image = OBJECT_HEIGHT * safe_magnification;
-                    mesh_image = createImage(drag_elements.screen.x, 0, H_for_image);
-                    scene.add(mesh_image);
-                    mesh_image.children.forEach(m => {
-                        const colorKey = m.userData.colorKey;
-                        m.visible = !!COLOR_VISIBILITY[colorKey];
-                    });
-                }
-
-                // 畫光線（若開啟）
-                if (COLOR_VISIBILITY.showRays) {
-                    LIGHT_CONFIG.forEach((config) => {
-                        const colorKey = config.key;
-                        if (!COLOR_VISIBILITY[colorKey]) return;
-
-                        const ray_color = config.color;
-                        const y_pos_source = config.y;
-                        const z_pos_source = config.z;
-
-                        let y_pos_image = 0, z_pos_image = 0;
-                        if (isCalculable) {
-                            y_pos_image = y_pos_source * -safe_magnification;
-                            z_pos_image = z_pos_source * -safe_magnification;
-                        }
-
-                        const ray = createRayLine(
-                            drag_elements.object.x, y_pos_source, z_pos_source,
-                            drag_elements.screen.x, y_pos_image, z_pos_image,
-                            ray_color
-                        );
-                        ray_lines.push(ray);
-                        scene.add(ray);
-                    });
-                }
-
-                // 最後同步拖曳物件位置
-                if (mesh_light_source) mesh_light_source.position.x = drag_elements.object.x;
-                if (mesh_pinhole_wall) mesh_pinhole_wall.position.x = drag_elements.pinhole.x;
-                if (mesh_screen_wall) mesh_screen_wall.position.x = drag_elements.screen.x;
-
-            } catch (e) {
-                console.error('updateSimulation 發生例外：', e);
-                showErrorOverlay('更新模擬時發生錯誤，請重新整理頁面');
-            } finally {
-                needsSimulationUpdate = false;
-            }
-        }
-
-        // 顯示錯誤覆蓋
-        function showErrorOverlay(msg) {
-            errorOverlay.style.display = 'block';
-            // 可加上 msg 顯示（目前 overlay 已有說明）
-            console.warn('模擬錯誤：', msg);
-        }
-
-        // --- UI 控制綁定 ---
-        function setupUIControls() {
-            function handleCheckboxChange(event) {
-                const id = event.target.id;
-                if (id === 'showRays') {
-                    COLOR_VISIBILITY.showRays = !!event.target.checked;
                 } else {
-                    const key = id.replace('show', '').toLowerCase();
-                    COLOR_VISIBILITY[key] = !!event.target.checked;
+                    // ========== 字母 F 模式 ==========
+                    const g = ghosts3LED[p];
+                    const r = rays3LED[p];
+
+                    // 隱藏三色 LED 元素
+                    g.red.visible = false; g.blue.visible = false; g.green.visible = false;
+                    hideRay(r.red); hideRay(r.blue); hideRay(r.green);
+
+                    if (!isActive) {
+                        ghostsF[p].forEach(fg => fg.visible = false);
+                        raysF[p].forEach(fr => fr.visible = false);
+                    } else {
+                        F_SHAPE.forEach(([row, col], i) => {
+                            const ledLocalY = row * CONFIG.fSpacing - fCenterY;
+                            const ledLocalZ = col * CONFIG.fSpacing - fCenterZ;
+                            const ledWorldY = ySrc + ledLocalY;
+                            const ledWorldZ = zSrc + ledLocalZ;
+
+                            const proj = calcProjection(ledWorldY, ledWorldZ, pinWorldY, pinWorldZ);
+
+                            ghostsF[p][i].visible = true;
+                            ghostsF[p][i].position.set(-2.0, proj.y, proj.z);
+                            ghostsF[p][i].scale.set(ghostScale, ghostScale, 1);
+
+                            updateOptics(raysF[p][i], fLEDs[i], ghostsF[p][i], pinPos);
+                        });
+                    }
                 }
-                requestSimulationUpdate();
-            }
-
-            document.getElementById('showRed').addEventListener('change', handleCheckboxChange);
-            document.getElementById('showGreen').addEventListener('change', handleCheckboxChange);
-            document.getElementById('showBlue').addEventListener('change', handleCheckboxChange);
-            document.getElementById('showRays').addEventListener('change', handleCheckboxChange);
-        }
-
-        // --- 初始化場景 ---
-        function init() {
-            try {
-                scene = new THREE.Scene();
-                scene.background = new THREE.Color(0xf0f0f0);
-
-                const aspect = window.innerWidth / window.innerHeight;
-                camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
-                camera.position.set(-30, 5, 25);
-
-                renderer = new THREE.WebGLRenderer({ antialias: true });
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-                container.appendChild(renderer.domElement);
-
-                // WebGL context lost / restored 處理
-                renderer.domElement.addEventListener('webglcontextlost', function (e) {
-                    e.preventDefault();
-                    console.error('WebGL context lost');
-                    showErrorOverlay('WebGL context lost（顯示進程異常）。');
-                }, false);
-                renderer.domElement.addEventListener('webglcontextrestored', function () {
-                    console.info('WebGL context restored');
-                    errorOverlay.style.display = 'none';
-                    // 重新初始化或重新載入頁面
-                    // location.reload(); // 可視情況啟用
-                }, false);
-
-                controls = new THREE.OrbitControls(camera, renderer.domElement);
-                controls.enableDamping = true;
-                controls.dampingFactor = 0.05;
-                controls.minDistance = 10;
-                controls.maxDistance = 200;
-                controls.target.set(0, 0, 0);
-                controls.update();
-
-                const ambientLight = new THREE.AmbientLight(0x404040, 5);
-                scene.add(ambientLight);
-
-                // 參考拖曳平面
-                drag_plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-
-                // 建立物件
-                mesh_light_source = createLightSource(drag_elements.object.x, 0);
-                mesh_light_source.name = 'Draggable_Object';
-                scene.add(mesh_light_source);
-
-                mesh_pinhole_wall = createWall(drag_elements.pinhole.x, 0xaeaeae, 20, 10);
-                mesh_pinhole_wall.name = 'Draggable_Pinhole';
-                scene.add(mesh_pinhole_wall);
-
-                mesh_screen_wall = createWall(drag_elements.screen.x, drag_elements.screen.color, 50, 30);
-                mesh_screen_wall.name = 'Draggable_Screen';
-                scene.add(mesh_screen_wall);
-
-                setupDragControls();
-                setupUIControls();
-
-                // 首次要渲染一次（並執行模擬）
-                requestSimulationUpdate();
-
-                window.addEventListener('resize', onWindowResize);
-
-            } catch (e) {
-                console.error('init 發生錯誤：', e);
-                showErrorOverlay('初始化失敗，請檢查 console');
             }
         }
 
-        function onWindowResize() {
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-            if (renderer) renderer.setSize(window.innerWidth, window.innerHeight);
-            requestSimulationUpdate();
-        }
-
-        // --- 拖曳邏輯 ---
-        function setupDragControls() {
-            const raycaster = new THREE.Raycaster();
-            const mouse = new THREE.Vector2();
-            let isDragging = false;
-            let selectedMesh = null;
-            let offset = new THREE.Vector3();
-            const intersection = new THREE.Vector3();
-
-            // note: draggableMeshes are the top-level objects (we will test with intersectObjects and then climb parents)
-            const draggableRoots = () => [mesh_light_source, mesh_pinhole_wall, mesh_screen_wall].filter(Boolean);
-
-            function getNormalizedMouse(event) {
-                // 支援 touch
-                const clientX = (event.touches && event.touches[0]) ? event.touches[0].clientX : event.clientX;
-                const clientY = (event.touches && event.touches[0]) ? event.touches[0].clientY : event.clientY;
-                mouse.x = (clientX / window.innerWidth) * 2 - 1;
-                mouse.y = - (clientY / window.innerHeight) * 2 + 1;
-            }
-
-            function onPointerDown(event) {
-                // 只接受左鍵或觸控
-                if (event.type === 'pointerdown' && event.button !== 0 && !event.touches) return;
-
-                getNormalizedMouse(event);
-                raycaster.setFromCamera(mouse, camera);
-
-                const roots = draggableRoots();
-                const intersects = raycaster.intersectObjects(roots, true);
-
-                if (intersects.length > 0) {
-                    let target = intersects[0].object;
-                    // 找到頂層 draggable root
-                    while (target && !target.name) {
-                        target = target.parent;
-                    }
-                    // climb until parent has a Draggable_ name
-                    while (target && !target.name.startsWith('Draggable_')) {
-                        target = target.parent;
-                    }
-                    if (!target) return;
-
-                    selectedMesh = target;
-                    controls.enabled = false;
-                    isDragging = true;
-
-                    // 計算 offset
-                    raycaster.ray.intersectPlane(drag_plane, intersection);
-                    offset.copy(intersection).sub(selectedMesh.position);
-                    document.body.style.cursor = 'grabbing';
-
-                    event.preventDefault();
-                }
-            }
-
-            function onPointerMove(event) {
-                if (!isDragging || !selectedMesh) return;
-                getNormalizedMouse(event);
-                raycaster.setFromCamera(mouse, camera);
-
-                if (raycaster.ray.intersectPlane(drag_plane, intersection)) {
-                    let newX = intersection.x - offset.x;
-
-                    let limits = DRAG_LIMITS.object;
-                    if (selectedMesh.name === 'Draggable_Pinhole') limits = DRAG_LIMITS.pinhole;
-                    else if (selectedMesh.name === 'Draggable_Screen') limits = DRAG_LIMITS.screen;
-
-                    newX = Math.max(limits.min, Math.min(limits.max, newX));
-
-                    selectedMesh.position.x = newX;
-
-                    if (selectedMesh.name === 'Draggable_Object') drag_elements.object.x = newX;
-                    else if (selectedMesh.name === 'Draggable_Pinhole') drag_elements.pinhole.x = newX;
-                    else if (selectedMesh.name === 'Draggable_Screen') drag_elements.screen.x = newX;
-
-                    requestSimulationUpdate();
-                }
-            }
-
-            function onPointerUp() {
-                if (isDragging) {
-                    controls.enabled = true;
-                    isDragging = false;
-                    selectedMesh = null;
-                    document.body.style.cursor = 'grab';
-                }
-            }
-
-            // 使用 pointer event 綁定（包含 touch）
-            renderer.domElement.addEventListener('pointerdown', onPointerDown, false);
-            window.addEventListener('pointermove', onPointerMove, false);
-            window.addEventListener('pointerup', onPointerUp, false);
-            // 若需要支援 touchend/touchmove 分別也已涵蓋在 pointer events
-        }
-
-        // --- 主渲染迴圈（包含 FPS 限制） ---
-        function animate(now) {
-            try {
-                requestAnimationFrame(animate);
-
-                // update controls damping
-                controls.update();
-
-                // 若需要執行模擬更新，先跑一次 updateSimulation（在 render 前讓畫面狀態一致）
-                if (needsSimulationUpdate) updateSimulation();
-
-                // 限制最大 FPS
-                if (!lastRenderTime) lastRenderTime = now;
-                const delta = now - lastRenderTime;
-                if (delta >= RENDER_INTERVAL) {
-                    renderer.render(scene, camera);
-                    lastRenderTime = now - (delta % RENDER_INTERVAL);
-                }
-            } catch (e) {
-                console.error('渲染迴圈發生錯誤：', e);
-                showErrorOverlay('渲染發生錯誤，請重新整理頁面或關閉硬體加速再試。');
-            }
-        }
-
-        // --- 啟動 ---
-        window.addEventListener('load', () => {
-            init();
-            requestAnimationFrame(animate);
+            renderer.setSize(window.innerWidth, window.innerHeight);
         });
+
+        updateSystem();
+        animate();
 
     </script>
 </body>
+
 </html>
