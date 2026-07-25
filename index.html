@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
-    
+
 <head>
     <meta charset="UTF-8">
     <title>3D 針孔成像模擬器</title>
@@ -130,7 +130,8 @@
         }
 
         #sourceMode,
-        #pinholeCount {
+        #pinholeCount,
+        #displayMode {
             width: 100%;
             padding: 6px 8px;
             border: 1px solid #ccc;
@@ -141,6 +142,25 @@
             background: #f8f8f8;
             cursor: pointer;
             margin-bottom: 8px;
+        }
+
+        #clearRevealedBtn {
+            width: 100%;
+            padding: 6px;
+            background-color: #fff0f0;
+            border: 1px solid #e0a0a0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            color: #c44;
+            transition: background 0.2s;
+            margin-top: 4px;
+            display: none;
+        }
+
+        #clearRevealedBtn:hover {
+            background-color: #ffe0e0;
+            border-color: #c44;
         }
     </style>
     <script type="importmap">
@@ -191,6 +211,13 @@
             </select>
 
 
+
+            <div class="section-label">🎬 顯示模式</div>
+            <select id="displayMode">
+                <option value="instant">即時模式</option>
+                <option value="interactive">互動模式 (點擊發光)</option>
+            </select>
+            <button id="clearRevealedBtn">⚠ 清除已顯示的光路</button>
 
             <button id="resetBtn">↺ 重置位置</button>
 
@@ -244,9 +271,22 @@
 
             // 字母 F 模式
             fDotRadius: 2.5,
-            fSpacing: 8,
-            colorF: 0xffcc00
+            fSpacing: 8
         };
+
+        // 字母 F 的 10 個點各自的顏色
+        const F_COLORS = [
+            0xff3333,  // 紅
+            0xff8800,  // 橘
+            0xffcc00,  // 金黃
+            0x88cc00,  // 黃綠
+            0x00cc66,  // 綠
+            0x00bbcc,  // 青
+            0x3388ff,  // 藍
+            0x6644ff,  // 靖藍
+            0xaa22ff,  // 紫
+            0xff44aa   // 桃紅
+        ];
 
         // 1. 場景設置
         const scene = new THREE.Scene();
@@ -312,6 +352,7 @@
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(x, y, z);
             mesh.add(new THREE.PointLight(color, 3, 100));
+            mesh.userData = { isLED: true, ledColor: color };
             return mesh;
         }
         const redLED = createLED(CONFIG.colorRed, 0, 0, 0);
@@ -337,19 +378,20 @@
         const fGroup = new THREE.Group();
         fGroup.visible = false;
 
-        function createFDot(y, z) {
+        function createFDot(y, z, color) {
             const geo = new THREE.SphereGeometry(CONFIG.fDotRadius, 16, 16);
-            const mat = new THREE.MeshBasicMaterial({ color: CONFIG.colorF });
+            const mat = new THREE.MeshBasicMaterial({ color: color });
             const mesh = new THREE.Mesh(geo, mat);
             mesh.position.set(0, y, z);
-            mesh.add(new THREE.PointLight(CONFIG.colorF, 1, 60));
+            mesh.add(new THREE.PointLight(color, 1, 60));
+            mesh.userData = { isLED: true, ledColor: color };
             return mesh;
         }
 
-        F_SHAPE.forEach(([row, col]) => {
+        F_SHAPE.forEach(([row, col], i) => {
             const y = row * CONFIG.fSpacing - fCenterY;
             const z = col * CONFIG.fSpacing - fCenterZ;
-            const dot = createFDot(y, z);
+            const dot = createFDot(y, z, F_COLORS[i]);
             fGroup.add(dot);
             fLEDs.push(dot);
         });
@@ -416,10 +458,10 @@
         const ghosts3LED = [];
         const ghostsF = [];
 
-        function createFGhost() {
+        function createFGhost(color) {
             const geo = new THREE.CircleGeometry(CONFIG.fDotRadius, 16);
             const mat = new THREE.MeshBasicMaterial({
-                color: CONFIG.colorF,
+                color: color,
                 transparent: true,
                 opacity: 0.9,
                 side: THREE.DoubleSide,
@@ -441,7 +483,7 @@
             screenGroup.add(rg, bg, gg);
             ghosts3LED.push({ red: rg, blue: bg, green: gg });
 
-            const fSet = F_SHAPE.map(() => { const g = createFGhost(); screenGroup.add(g); return g; });
+            const fSet = F_SHAPE.map((_, i) => { const g = createFGhost(F_COLORS[i]); screenGroup.add(g); return g; });
             ghostsF.push(fSet);
         }
 
@@ -459,7 +501,8 @@
         const rayMatRed = new THREE.LineBasicMaterial({ color: CONFIG.colorRed, ...rayMatBase });
         const rayMatBlue = new THREE.LineBasicMaterial({ color: CONFIG.colorBlue, ...rayMatBase });
         const rayMatGreen = new THREE.LineBasicMaterial({ color: CONFIG.colorGreen, ...rayMatBase });
-        const rayMatF = new THREE.LineBasicMaterial({ color: CONFIG.colorF, ...rayMatBase });
+        // 字母 F 每個點的專屬 ray 材質
+        const fRayMats = F_COLORS.map(c => new THREE.LineBasicMaterial({ color: c, ...rayMatBase }));
 
         function createRay(mat) {
             const line = new THREE.Line(new THREE.BufferGeometry(), mat);
@@ -479,7 +522,7 @@
                 blue: createRay(rayMatBlue),
                 green: createRay(rayMatGreen)
             });
-            const fRaySet = F_SHAPE.map(() => createRay(rayMatF));
+            const fRaySet = F_SHAPE.map((_, i) => createRay(fRayMats[i]));
             fRaySet.forEach(r => r.visible = false);
             raysF.push(fRaySet);
         }
@@ -496,6 +539,8 @@
         let isDragging = false;
         let selectedGroup = null;
         let dragOffset = 0;
+        let mouseDownPos = { x: 0, y: 0 };
+        let mouseDownTime = 0;
         const debugText = document.getElementById('debugText');
         const dragStatus = document.getElementById('dragStatus');
 
@@ -516,6 +561,51 @@
         const sourceModeSelect = document.getElementById('sourceMode');
         const ledTogglesDiv = document.getElementById('ledToggles');
         const pinholeCountSelect = document.getElementById('pinholeCount');
+        const displayModeSelect = document.getElementById('displayMode');
+        const clearRevealedBtn = document.getElementById('clearRevealedBtn');
+
+        // 已揭示的 LED+針孔組合 (互動模式用)
+        // key 格式: "ledId_pinholeIndex"  (ledId = 'red'|'blue'|'green'|'f0'..'f9')
+        const revealedSet = new Set();    // 動畫完成，永久顯示光路+成像
+        const animatingSet = new Set();   // 動畫中，只顯示光路（不顯示成像）
+
+        function getLedId(ledMesh) {
+            if (ledMesh === redLED) return 'red';
+            if (ledMesh === blueLED) return 'blue';
+            if (ledMesh === greenLED) return 'green';
+            const idx = fLEDs.indexOf(ledMesh);
+            if (idx >= 0) return 'f' + idx;
+            return null;
+        }
+
+        function makeKey(ledId, pinholeIndex) {
+            return ledId + '_' + pinholeIndex;
+        }
+
+        // 光路是否可見（動畫中 或 已揭示）
+        function isRayVisible(ledId, pinholeIndex) {
+            const key = makeKey(ledId, pinholeIndex);
+            return revealedSet.has(key) || animatingSet.has(key);
+        }
+
+        // 成像是否可見（只有已揭示）
+        function isGhostVisible(ledId, pinholeIndex) {
+            return revealedSet.has(makeKey(ledId, pinholeIndex));
+        }
+
+        function revealLed(ledId, pinholeIndex) {
+            const key = makeKey(ledId, pinholeIndex);
+            animatingSet.delete(key);
+            revealedSet.add(key);
+        }
+
+        function startAnimating(ledId, pinholeIndex) {
+            animatingSet.add(makeKey(ledId, pinholeIndex));
+        }
+
+        function isInteractiveMode() {
+            return displayModeSelect.value === 'interactive';
+        }
 
         // 光源模式切換
         sourceModeSelect.addEventListener('change', () => {
@@ -539,6 +629,22 @@
             for (let p = 0; p < MAX_PINHOLES; p++) {
                 holeTubes[p].visible = (p < count);
             }
+            updateSystem();
+        });
+
+        // 顯示模式切換
+        displayModeSelect.addEventListener('change', () => {
+            const interactive = isInteractiveMode();
+            clearRevealedBtn.style.display = interactive ? 'block' : 'none';
+            revealedSet.clear();
+            animatingSet.clear();
+            updateSystem();
+        });
+
+        // 清除已顯示的光路
+        clearRevealedBtn.addEventListener('click', () => {
+            revealedSet.clear();
+            animatingSet.clear();
             updateSystem();
         });
 
@@ -572,6 +678,8 @@
         }
 
         function onMouseDown(event) {
+            mouseDownPos = { x: event.clientX, y: event.clientY };
+            mouseDownTime = Date.now();
             const intersects = getIntersects(event);
             if (intersects.length > 0) {
                 let target = intersects[0].object;
@@ -630,9 +738,45 @@
             }
         }
 
-        function onMouseUp() {
+        function onMouseUp(event) {
+            const wasDrag = isDragging && (
+                Math.abs(event.clientX - mouseDownPos.x) > 5 ||
+                Math.abs(event.clientY - mouseDownPos.y) > 5
+            );
             isDragging = false; selectedGroup = null; orbitControls.enabled = true;
             dragStatus.innerText = ""; document.body.style.cursor = 'default';
+
+            // 如果是短按且沒有移動，檢查是否點擊了 LED
+            if (!wasDrag && (Date.now() - mouseDownTime) < 300) {
+                mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                // 專門檢查可見的 LED 球體
+                const ledObjects = [];
+                const isF = sourceModeSelect.value === 'letterF';
+                if (!isF) {
+                    // 三色 LED 模式：只加入可見的 LED
+                    [redLED, blueLED, greenLED].forEach(led => {
+                        if (led.visible) ledObjects.push(led);
+                    });
+                } else {
+                    // 字母 F 模式：加入 fGroup 裡的 LED
+                    fGroup.children.forEach(fc => {
+                        if (fc.userData && fc.userData.isLED) ledObjects.push(fc);
+                    });
+                }
+                const ledHits = raycaster.intersectObjects(ledObjects, true);
+                if (ledHits.length > 0) {
+                    let hitLED = ledHits[0].object;
+                    // 往上找到有 isLED 標記的 mesh
+                    while (hitLED && !(hitLED.userData && hitLED.userData.isLED)) {
+                        hitLED = hitLED.parent;
+                    }
+                    if (hitLED && hitLED.userData.isLED) {
+                        fireLightAnimation(hitLED);
+                    }
+                }
+            }
         }
 
 
@@ -662,6 +806,7 @@
 
             const ghostScale = M;
             const isF = sourceModeSelect.value === 'letterF';
+            const interactive = isInteractiveMode();
 
             // 控制 LED 球體本身的可見性
             redLED.visible = !isF && toggleRed.checked;
@@ -733,18 +878,24 @@
                         g.green.position.set(-2.0, projGreen.y, projGreen.z);
                         g.green.scale.set(ghostScale, ghostScale, 1);
 
-                        // LED 開關
-                        function setVis(enabled, ghost, ray) {
-                            ghost.visible = enabled;
-                            if (!enabled) hideRay(ray);
+                        // LED 開關 + 模式判斷
+                        function setVis(enabled, ghost, ray, ledId) {
+                            const showRay = enabled && (!interactive || isRayVisible(ledId, p));
+                            const showGhost = enabled && (!interactive || isGhostVisible(ledId, p));
+                            ghost.visible = showGhost;
+                            if (!showRay) hideRay(ray);
                         }
-                        setVis(toggleRed.checked, g.red, r.red);
-                        setVis(toggleBlue.checked, g.blue, r.blue);
-                        setVis(toggleGreen.checked, g.green, r.green);
+                        setVis(toggleRed.checked, g.red, r.red, 'red');
+                        setVis(toggleBlue.checked, g.blue, r.blue, 'blue');
+                        setVis(toggleGreen.checked, g.green, r.green, 'green');
 
-                        if (toggleRed.checked) updateOptics(r.red, redLED, g.red, pinPos);
-                        if (toggleBlue.checked) updateOptics(r.blue, blueLED, g.blue, pinPos);
-                        if (toggleGreen.checked) updateOptics(r.green, greenLED, g.green, pinPos);
+                        function updateIfVisible(enabled, ledId, ray, led, ghost) {
+                            if (enabled && (!interactive || isRayVisible(ledId, p)))
+                                updateOptics(ray, led, ghost, pinPos);
+                        }
+                        updateIfVisible(toggleRed.checked, 'red', r.red, redLED, g.red);
+                        updateIfVisible(toggleBlue.checked, 'blue', r.blue, blueLED, g.blue);
+                        updateIfVisible(toggleGreen.checked, 'green', r.green, greenLED, g.green);
                     }
 
                     // 隱藏此針孔的 F 模式元素
@@ -772,19 +923,147 @@
 
                             const proj = calcProjection(ledWorldY, ledWorldZ, pinWorldY, pinWorldZ);
 
-                            ghostsF[p][i].visible = true;
+                            const fId = 'f' + i;
+                            const showRay = !interactive || isRayVisible(fId, p);
+                            const showGhost = !interactive || isGhostVisible(fId, p);
+                            ghostsF[p][i].visible = showGhost;
                             ghostsF[p][i].position.set(-2.0, proj.y, proj.z);
                             ghostsF[p][i].scale.set(ghostScale, ghostScale, 1);
 
-                            updateOptics(raysF[p][i], fLEDs[i], ghostsF[p][i], pinPos);
+                            if (showRay) {
+                                updateOptics(raysF[p][i], fLEDs[i], ghostsF[p][i], pinPos);
+                            } else {
+                                raysF[p][i].visible = false;
+                            }
                         });
                     }
                 }
             }
         }
 
+        // ==========================================
+        // ✨ 光線動畫系統
+        // ==========================================
+        const activeAnimations = [];
+
+        function fireLightAnimation(ledMesh) {
+            const color = ledMesh.userData.ledColor;
+            const activePinholes = parseInt(pinholeCountSelect.value);
+            const ledId = getLedId(ledMesh);
+
+            // 動畫開始時立即將光路標記為 animating，讓 ray 馬上顯示
+            for (let p = 0; p < activePinholes; p++) {
+                if (isInteractiveMode()) startAnimating(ledId, p);
+            }
+            if (isInteractiveMode()) updateSystem();
+
+            // 為每個活躍的針孔發射一個粒子
+            for (let p = 0; p < activePinholes; p++) {
+                const ledPos = new THREE.Vector3();
+                ledMesh.getWorldPosition(ledPos);
+
+                const pinPos = new THREE.Vector3();
+                holeTubes[p].getWorldPosition(pinPos);
+
+                // 找對應的 ghost 位置
+                let ghostPos = null;
+                const isF = sourceModeSelect.value === 'letterF';
+                if (!isF) {
+                    const ghostV = new THREE.Vector3();
+                    if (ledMesh === redLED) { ghosts3LED[p].red.getWorldPosition(ghostV); ghostPos = ghostV; }
+                    else if (ledMesh === blueLED) { ghosts3LED[p].blue.getWorldPosition(ghostV); ghostPos = ghostV; }
+                    else if (ledMesh === greenLED) { ghosts3LED[p].green.getWorldPosition(ghostV); ghostPos = ghostV; }
+                } else {
+                    const idx = fLEDs.indexOf(ledMesh);
+                    if (idx >= 0) {
+                        const ghostV = new THREE.Vector3();
+                        ghostsF[p][idx].getWorldPosition(ghostV);
+                        ghostPos = ghostV;
+                    }
+                }
+
+                // 找不到對應的 ghost 則跳過
+                if (!ghostPos) continue;
+
+                // 建立發光粒子
+                const particleGeo = new THREE.SphereGeometry(2, 16, 16);
+                const particleMat = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 1.0
+                });
+                const particle = new THREE.Mesh(particleGeo, particleMat);
+                particle.position.copy(ledPos);
+                particle.renderOrder = 10;
+                scene.add(particle);
+
+                // 加一個點光源跟隨粒子
+                const glow = new THREE.PointLight(color, 5, 40);
+                particle.add(glow);
+
+                // 動畫路徑：LED -> 針孔 -> 屏幕
+                const totalDist = ledPos.distanceTo(pinPos) + pinPos.distanceTo(ghostPos);
+                const duration = Math.max(800, Math.min(2000, totalDist * 8)); // ms
+                const splitRatio = ledPos.distanceTo(pinPos) / totalDist;
+
+                activeAnimations.push({
+                    particle,
+                    glow,
+                    startPos: ledPos.clone(),
+                    midPos: pinPos.clone(),
+                    endPos: ghostPos.clone(),
+                    startTime: performance.now(),
+                    duration,
+                    splitRatio,
+                    ledId,
+                    pinholeIndices: [p],
+                    done: false
+                });
+            }
+        }
+
+        function updateAnimations(now) {
+            for (let i = activeAnimations.length - 1; i >= 0; i--) {
+                const anim = activeAnimations[i];
+                const elapsed = now - anim.startTime;
+                let t = Math.min(elapsed / anim.duration, 1.0);
+
+                // 緩動函式 (ease-in-out)
+                t = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+                if (t < anim.splitRatio) {
+                    // 第一段: LED -> 針孔
+                    const segT = t / anim.splitRatio;
+                    anim.particle.position.lerpVectors(anim.startPos, anim.midPos, segT);
+                } else {
+                    // 第二段: 針孔 -> 屏幕
+                    const segT = (t - anim.splitRatio) / (1 - anim.splitRatio);
+                    anim.particle.position.lerpVectors(anim.midPos, anim.endPos, segT);
+                }
+
+                // 脈衝發光 + 淡入淡出
+                const pulse = 0.7 + 0.3 * Math.sin(elapsed * 0.015);
+                anim.particle.material.opacity = pulse * (t < 0.1 ? t / 0.1 : t > 0.85 ? (1 - t) / 0.15 : 1);
+                anim.particle.scale.setScalar(0.8 + 0.4 * Math.sin(elapsed * 0.01));
+                anim.glow.intensity = 3 + 2 * Math.sin(elapsed * 0.012);
+
+                if (elapsed >= anim.duration) {
+                    // 動畫完成：在互動模式下揭示對應的光路
+                    if (anim.ledId && isInteractiveMode()) {
+                        anim.pinholeIndices.forEach(pi => revealLed(anim.ledId, pi));
+                        updateSystem();
+                    }
+                    scene.remove(anim.particle);
+                    anim.particle.geometry.dispose();
+                    anim.particle.material.dispose();
+                    activeAnimations.splice(i, 1);
+                }
+            }
+        }
+
         function animate() {
             requestAnimationFrame(animate);
+            updateAnimations(performance.now());
             renderer.render(scene, camera);
         }
 
