@@ -1,0 +1,1720 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>運動學演示 · 位置、速度與加速度</title>
+<style>
+  :root{
+    color-scheme: light;
+    --plane:#f5f3ee;
+    --surface:#fbfaf7;
+    --ink:#1b1a17;
+    --ink-2:#57544e;
+    --muted:#716d65;
+    --grid:#e7e3da;
+    --axis:#cdc7ba;
+    --hair:rgba(27,26,23,.10);
+    --shadow:0 1px 2px rgba(27,26,23,.04), 0 8px 24px -12px rgba(27,26,23,.14);
+    --c-x:#00806a;
+    --c-v:#c2662a;
+    --c-a:#6b4f9e;
+    --limb-far:#8f8a80;
+    --track:#e7e3da;
+    --ghost:rgba(27,26,23,.045);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:where(:not([data-theme="light"])){
+      color-scheme: dark;
+      --plane:#0e0f10;
+      --surface:#17181a;
+      --ink:#f2f1ec;
+      --ink-2:#b8b4ab;
+      --muted:#938f86;
+      --grid:#26282b;
+      --axis:#3a3d41;
+      --hair:rgba(255,255,255,.10);
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+      --c-x:#2ba286;
+      --c-v:#c8763a;
+      --c-a:#9179d0;
+      --limb-far:#9e9a92;
+      --track:#26282b;
+      --ghost:rgba(255,255,255,.05);
+    }
+  }
+  :root[data-theme="dark"]{
+    color-scheme: dark;
+    --plane:#0e0f10;
+    --surface:#17181a;
+    --ink:#f2f1ec;
+    --ink-2:#b8b4ab;
+    --muted:#938f86;
+    --grid:#26282b;
+    --axis:#3a3d41;
+    --hair:rgba(255,255,255,.10);
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.7);
+    --c-x:#2ba286;
+    --c-v:#c8763a;
+    --c-a:#9179d0;
+    --limb-far:#9e9a92;
+    --track:#26282b;
+    --ghost:rgba(255,255,255,.05);
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--plane);
+    color:var(--ink);
+    font-family:ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", "Noto Sans TC", sans-serif;
+    font-size:17px;
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    padding:30px 26px 40px;
+  }
+  .wrap{max-width:1680px;margin:0 auto}
+
+  header{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;padding-bottom:16px;margin-bottom:22px;border-bottom:1px solid var(--hair)}
+  h1{margin:0;font-size:27px;font-weight:600;letter-spacing:.14em;line-height:1.3}
+  header p{margin:3px 0 0;color:var(--muted);font-size:14px;letter-spacing:.1em}
+  .theme-btn{
+    border:1px solid var(--hair);background:var(--surface);color:var(--ink-2);
+    width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:16px;line-height:1;
+    display:grid;place-items:center;transition:.18s ease;flex:none;
+  }
+  .theme-btn:hover{color:var(--ink);border-color:var(--axis)}
+
+  .grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px;align-items:start}
+  @media (max-width:1100px){ .grid{grid-template-columns:minmax(0,1fr)} }
+
+  .card{background:var(--surface);border:1px solid var(--hair);border-radius:14px;box-shadow:var(--shadow);padding:16px 20px 18px}
+  .card h2{margin:0 0 2px;font-size:14px;font-weight:600;letter-spacing:.16em;color:var(--ink-2)}
+  .card-head{display:flex;flex-wrap:wrap;gap:10px 16px;justify-content:space-between;align-items:flex-end;margin-bottom:12px}
+  .head-ctl{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+  /* ---------- 控制元件 ---------- */
+  button.act{
+    font:inherit;font-size:15px;border:1px solid var(--hair);background:transparent;color:var(--ink-2);
+    padding:7px 17px;border-radius:999px;cursor:pointer;transition:.18s ease;letter-spacing:.06em;white-space:nowrap;
+  }
+  button.act:hover{color:var(--ink);border-color:var(--axis);background:var(--ghost)}
+  button.act.on{color:var(--surface);background:var(--ink-2);border-color:var(--ink-2)}
+  button.act:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visible,.theme-btn:focus-visible{outline:2px solid var(--c-x);outline-offset:2px}
+  .sel{display:inline-flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);letter-spacing:.08em}
+  select{
+    font:inherit;font-size:15px;letter-spacing:.03em;color:var(--ink);background-color:var(--surface);
+    border:1px solid var(--hair);border-radius:999px;padding:7px 34px 7px 15px;cursor:pointer;
+    appearance:none;-webkit-appearance:none;transition:.18s ease;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='11' height='8' viewBox='0 0 11 8'><path d='M1.5 2L5.5 6L9.5 2' fill='none' stroke='%23807c74' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat:no-repeat;background-position:right 13px center;
+  }
+  select:hover{border-color:var(--axis)}
+  select:disabled{opacity:.55;cursor:not-allowed}
+  optgroup{font-size:13px;color:var(--muted)}
+  option{font-size:15px;color:var(--ink)}
+
+  /* ---------- 場景 ---------- */
+  .stage-box{position:relative}
+  canvas{display:block;width:100%}
+  #stage{height:258px}
+  @media (max-width:560px){ #stage{height:230px} }
+
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0 0;padding-top:12px;border-top:1px solid var(--hair)}
+  .toolbar .sp{flex:1}
+  .chk{display:inline-flex;align-items:center;gap:8px;font-size:15px;color:var(--ink-2);cursor:pointer;user-select:none}
+  .chk input{accent-color:var(--c-a);width:16px;height:16px;margin:0}
+  .clock{font-size:16px;color:var(--muted);font-variant-numeric:tabular-nums;letter-spacing:.03em}
+  .clock b{color:var(--ink-2);font-weight:600}
+  .prog{height:2px;border-radius:2px;background:var(--track);margin:10px 0 14px;overflow:hidden}
+  .prog i{display:block;height:100%;width:0;background:var(--axis);border-radius:2px}
+  .ans{font-size:14px;color:var(--ink-2);letter-spacing:.05em;padding:3px 11px;border-radius:999px;background:var(--ghost);white-space:nowrap}
+  .ans:empty{padding:0;background:transparent}
+
+  /* ---------- 滑桿 ---------- */
+  .scene-card,.ctls-box{overflow-x:hidden}
+  .ctls-box{position:relative}
+  .ctl{padding:10px 12px 7px;border-radius:10px;border:1px solid transparent;transition:.2s ease}
+  .ctl + .ctl{margin-top:3px}
+  .ctl.lead{background:var(--ghost);border-color:var(--hair)}
+  .ctl-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+  .nm{font-size:16px;color:var(--ink);letter-spacing:.04em}
+  .nm i{font-style:italic;font-family:Georgia,"Times New Roman",serif;color:var(--ink-2);margin-left:3px}
+  .badge{
+    font-size:12px;letter-spacing:.1em;color:var(--surface);background:var(--c);
+    padding:2px 8px;border-radius:999px;opacity:0;transition:opacity .2s ease
+  }
+  .ctl.lead .badge{opacity:1}
+  .val{margin-left:auto;font-size:18px;font-variant-numeric:tabular-nums;color:var(--ink);letter-spacing:.01em}
+  .val em{font-style:normal;font-size:13px;color:var(--muted);margin-left:4px}
+
+  .rail{position:relative;padding:0 1px}
+  .rail::before{content:"";position:absolute;left:50%;top:50%;width:1px;height:14px;background:var(--axis);transform:translate(-50%,-50%);pointer-events:none;z-index:0}
+  .ov{position:absolute;top:50%;transform:translateY(-50%);font-size:13px;line-height:1;color:var(--c);opacity:0;transition:opacity .15s ease;pointer-events:none}
+  .ov.lo{left:-14px}
+  .ov.hi{right:-14px}
+  .rail.off-lo .ov.lo,.rail.off-hi .ov.hi{opacity:1}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;background:transparent;margin:0;height:24px;cursor:pointer;position:relative;z-index:1;display:block;
+  }
+  input[type=range]::-webkit-slider-runnable-track{height:7px;border-radius:999px;background:var(--fill,var(--track))}
+  input[type=range]::-moz-range-track{height:7px;border-radius:999px;background:var(--fill,var(--track))}
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:20px;height:20px;margin-top:-6.5px;border-radius:50%;
+    background:var(--surface);border:2.5px solid var(--c);box-shadow:0 1px 3px rgba(27,26,23,.22);transition:transform .12s ease
+  }
+  input[type=range]::-moz-range-thumb{
+    width:20px;height:20px;border-radius:50%;background:var(--surface);border:2.5px solid var(--c);
+    box-shadow:0 1px 3px rgba(27,26,23,.22);transition:transform .12s ease
+  }
+  input[type=range]:active::-webkit-slider-thumb{transform:scale(1.12)}
+  input[type=range]:active::-moz-range-thumb{transform:scale(1.12)}
+  .scale{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;padding:1px 10px 0;letter-spacing:.03em}
+
+  /* ---------- 遮罩 ---------- */
+  .mask{
+    position:absolute;inset:-6px;background:var(--surface);border:1px dashed var(--axis);border-radius:12px;
+    display:none;place-items:center;text-align:center;z-index:5;
+  }
+  body.masked .mask{display:grid}
+  .mask .q{font-size:46px;line-height:1;color:var(--axis);margin-bottom:12px;font-weight:300}
+  .mask p{margin:0;color:var(--muted);font-size:16px;letter-spacing:.06em}
+
+  /* ---------- 取樣與圖表 ---------- */
+  .sampling-control{
+    --c:var(--ink-2);margin:0 0 8px;padding:11px 12px 9px;border:1px solid var(--hair);
+    border-radius:11px;background:var(--ghost)
+  }
+  .sampling-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:2px}
+  .sampling-head label{font-size:14px;color:var(--ink-2);font-weight:600;letter-spacing:.08em}
+  .sampling-head output{font-size:14px;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .sampling-control input[type=range]{margin:0}
+  .sampling-scale{display:flex;justify-content:space-between;padding:0 10px;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .sampling-note{margin:3px 0 0;font-size:12.5px;color:var(--muted);letter-spacing:.03em}
+
+  .chart{height:138px}
+  .chart-details{margin:0;padding:0;border:0}
+  .chart-details + .chart-details{border-top:1px solid var(--hair);padding-top:4px;margin-top:4px}
+  .chart-details > summary{
+    display:flex;align-items:center;gap:9px;min-height:30px;padding:3px 2px;cursor:pointer;
+    color:var(--ink-2);font-size:14px;letter-spacing:.05em;list-style:none
+  }
+  .chart-details > summary::-webkit-details-marker,
+  .motion-details > summary::-webkit-details-marker,
+  .record-details > summary::-webkit-details-marker{display:none}
+  .chart-details > summary::before,.motion-details > summary::before,.record-details > summary::before{content:"▸";font-size:11px;color:var(--muted)}
+  .chart-details[open] > summary::before,.motion-details[open] > summary::before,.record-details[open] > summary::before{content:"▾"}
+  .chart-title{font-weight:600;color:var(--ink-2)}
+  .chart-title i,.chart-unit i{font-family:Georgia,"Times New Roman",serif}
+  .chart-unit{margin-left:auto;color:var(--muted);font-size:13px;letter-spacing:.03em}
+  .chart-row{min-width:0}
+
+  .motion-details,.record-details{margin-top:12px;border-top:1px solid var(--hair);padding-top:9px}
+  body.masked .motion-details,body.masked .record-card{display:none}
+  .motion-details > summary,.record-details > summary{display:flex;align-items:center;gap:9px;min-height:30px;cursor:pointer;font-size:14px;color:var(--muted);letter-spacing:.08em;list-style:none}
+  .motion-copy{margin-top:9px;padding:10px 12px;border-radius:10px;background:var(--ghost)}
+  .motion-copy strong{display:block;margin-bottom:2px;color:var(--ink-2);font-size:13px;letter-spacing:.08em}
+  .motion-copy p{margin:0;color:var(--ink);font-size:15px;line-height:1.65}
+  .table-wrap{max-height:360px;overflow:auto;margin-top:8px;border-bottom:1px solid var(--hair)}
+  .table-wrap:focus-visible{outline:2px solid var(--c-x);outline-offset:2px}
+  table{width:100%;min-width:300px;border-collapse:collapse;margin:0;font-size:15.5px;font-variant-numeric:tabular-nums}
+  th,td{text-align:right;padding:5px 8px;border-bottom:1px solid var(--hair);white-space:nowrap}
+  th{position:sticky;top:0;z-index:1;background:var(--surface);color:var(--muted);font-weight:500;font-size:13px;letter-spacing:.06em}
+  th:first-child,td:first-child{text-align:left;color:var(--ink-2)}
+  td{color:var(--ink)}
+  .swatch{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;vertical-align:1px}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+
+  /* ---------- 桌面三欄與等高圖形 ---------- */
+  .scene-card,.graphs-card,.record-card{min-width:0}
+  .charts-stack{min-width:0}
+  .record-card .record-details{margin:0;padding:0;border:0;min-height:0}
+  .record-card .record-details > summary{
+    display:flex;align-items:center;min-height:34px;color:var(--ink-2);font-weight:600
+  }
+
+  @media (min-width:1101px){
+    .grid{align-items:stretch}
+    .graphs-card{display:flex;flex-direction:column;min-height:0}
+    .graphs-card .card-head,.graphs-card .sampling-control,.graphs-card .motion-details{flex:none}
+    .charts-stack{flex:0 0 auto;min-height:0;overflow:visible}
+    .charts-stack.has-open-chart{flex:1 1 0;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain}
+    .charts-stack .chart-row{height:var(--open-chart-height,138px);min-height:72px;overflow:hidden}
+    .charts-stack .chart{height:100%;min-height:0}
+  }
+
+  @media (min-width:1261px){
+    .grid{
+      grid-template-columns:minmax(0,1.12fr) minmax(0,1fr) minmax(340px,.76fr);
+      align-items:stretch
+    }
+    body.masked .grid{grid-template-columns:minmax(0,1.12fr) minmax(0,1fr)}
+    .record-card .table-wrap{min-height:120px}
+  }
+
+  @media (max-width:1260px){
+    .record-card{grid-column:1/-1}
+  }
+
+
+  /* ---------- 可收縮紀錄側欄與共用高度 ---------- */
+  .height-resizer{display:none}
+
+  @media (min-width:1261px){
+    .grid.record-sidebar-collapsed{
+      grid-template-columns:minmax(0,1.12fr) minmax(0,1fr) 54px
+    }
+    body.masked .grid,
+    body.masked .grid.record-sidebar-collapsed{
+      grid-template-columns:minmax(0,1.12fr) minmax(0,1fr)
+    }
+    .grid.record-sidebar-collapsed .record-card{
+      padding:10px 7px;
+      overflow:hidden
+    }
+    .grid.record-sidebar-collapsed .record-card .record-details{height:100%}
+    .grid.record-sidebar-collapsed .record-card .record-details > summary{
+      height:100%;min-height:0;padding:4px 0;justify-content:center;gap:10px;
+      writing-mode:vertical-rl;text-orientation:mixed;white-space:nowrap;
+      overflow:hidden;font-size:13px;letter-spacing:.12em
+    }
+    .grid.record-sidebar-collapsed .record-card .record-details > summary::before{
+      content:"◂";writing-mode:horizontal-tb;margin:0
+    }
+
+    .grid.height-set > .card{height:var(--panel-height)}
+    .grid.height-set .scene-card{
+      display:flex;min-height:0;overflow:hidden;flex-direction:column
+    }
+    .grid.height-set .scene-card .card-head,
+    .grid.height-set .scene-card .toolbar,
+    .grid.height-set .scene-card .prog{flex:none}
+    .grid.height-set .scene-card .stage-box{
+      flex:1.05 1 220px;min-height:165px
+    }
+    .grid.height-set .scene-card #stage{height:100%;min-height:0}
+    .grid.height-set .scene-card .ctls-box{
+      flex:1.2 1 260px;min-height:0;overflow-x:hidden;overflow-y:auto
+    }
+    .grid.height-set .scene-card #ctls{
+      display:flex;height:100%;min-height:222px;flex-direction:column
+    }
+    .grid.height-set .scene-card .ctl{
+      display:flex;flex:1 1 0;min-height:74px;justify-content:center;flex-direction:column
+    }
+    .grid.height-set .graphs-card,
+    .grid.height-set .record-card{overflow:hidden}
+
+    .height-resizer{
+      position:relative;display:flex;align-items:center;justify-content:center;
+      height:30px;margin-top:2px;cursor:ns-resize;touch-action:none;user-select:none
+    }
+    .height-resizer::before{
+      content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:var(--hair)
+    }
+    .height-resizer span{
+      position:relative;width:58px;height:6px;border-radius:999px;
+      background:var(--axis);box-shadow:0 0 0 6px var(--plane);
+      transition:background .16s ease,transform .16s ease
+    }
+    .height-resizer:hover span,.height-resizer:focus-visible span{background:var(--ink-2)}
+    .height-resizer:active span{transform:scaleY(1.35)}
+    .height-resizer:focus-visible{outline:none}
+    .height-resizer:focus-visible span{box-shadow:0 0 0 6px var(--plane),0 0 0 8px var(--c-x)}
+    .grid.record-sidebar-collapsed .record-details > summary:focus-visible{outline-offset:-2px}
+    body.resizing-panels{cursor:ns-resize;user-select:none}
+  }
+
+
+  .scale > span,.sampling-scale > span{
+    display:flex;width:0;justify-content:center;white-space:nowrap
+  }
+
+  @media (min-width:1261px) and (prefers-reduced-motion:no-preference){
+    body:not(.resizing-panels) .grid{transition:grid-template-columns .18s ease}
+    body:not(.resizing-panels) .grid.height-set > .card{transition:height .14s ease}
+  }
+
+  @media (max-width:560px){
+    body{padding:18px 12px 28px}
+    header{gap:12px;margin-bottom:16px}
+    h1{font-size:24px;letter-spacing:.1em}
+    header p{font-size:12.5px;letter-spacing:.06em}
+    .card{padding:14px}
+    .head-ctl,.sel{min-width:0;max-width:100%}
+    .head-ctl{width:100%}
+    .sel{width:100%;justify-content:space-between}
+    .sel select{min-width:0;max-width:100%}
+    .toolbar{gap:8px}
+    button.act{padding:7px 14px}
+  }
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>運動學演示</h1>
+      <p>POSITION · VELOCITY · ACCELERATION</p>
+    </div>
+    <button class="theme-btn" id="theme" title="切換淺色／深色" aria-label="切換淺色／深色">◐</button>
+  </header>
+
+  <div class="grid" id="workspace-grid">
+
+    <section class="card scene-card" id="scene-panel">
+      <div class="card-head">
+        <h2>運動場景</h2>
+        <div class="head-ctl">
+          <label class="sel">行為模式
+            <select id="beh" aria-label="行為模式">
+              <option value="manual">手動操作</option>
+              <optgroup label="走路">
+                <option value="cv">悠閒散步</option>
+                <option value="stopgo">走走停停</option>
+                <option value="pace">來回踱步</option>
+                <option value="shm">不停地來回走</option>
+                <option value="wander">漫無目的閒晃</option>
+              </optgroup>
+              <optgroup label="趕路">
+                <option value="cruise">小跑步後停下</option>
+                <option value="ca">起跑衝刺</option>
+                <option value="jerk">越跑越急</option>
+                <option value="brake">衝刺後煞停</option>
+              </optgroup>
+              <optgroup label="折返">
+                <option value="shuttle">折返跑</option>
+                <option value="wall">蹬牆折返</option>
+                <option value="turn">跑過頭再折返</option>
+              </optgroup>
+              <option value="__q" hidden>？　隱藏中</option>
+            </select>
+          </label>
+          <button class="act" id="quiz">出題</button>
+        </div>
+      </div>
+
+      <div class="stage-box">
+        <canvas id="stage" aria-label="一位行人在 x 軸上左右移動的動畫場景"></canvas>
+        <div class="mask">
+          <div>
+            <div class="q">？</div>
+            <p>請展開右側圖形並描述此人的運動</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button class="act" id="play">播放</button>
+        <button class="act" id="reset">重設</button>
+        <label class="chk"><input type="checkbox" id="vec" checked>顯示速度／加速度向量</label>
+        <span class="ans" id="ans" role="status" aria-live="polite"></span>
+        <span class="sp"></span>
+        <span class="clock">t = <b id="clock">0.00</b> s</span>
+      </div>
+      <div class="prog"><i id="progbar"></i></div>
+
+      <div class="ctls-box">
+        <div id="ctls">
+          <div class="ctl" data-k="x" style="--c:var(--c-x)">
+            <div class="ctl-head">
+              <span class="dot"></span><span class="nm">位置<i>x</i></span>
+              <span class="badge">主控</span>
+              <span class="val"><span id="out-x">+0.00</span><em>m</em></span>
+            </div>
+            <div class="rail" id="rail-x"><span class="ov lo">◂</span><span class="ov hi">▸</span>
+              <input type="range" id="s-x" min="-10" max="10" step="0.01" value="0" aria-label="位置 x，單位公尺"></div>
+            <div class="scale"><span>−10</span><span>0</span><span>+10</span></div>
+          </div>
+
+          <div class="ctl" data-k="v" style="--c:var(--c-v)">
+            <div class="ctl-head">
+              <span class="dot"></span><span class="nm">速度<i>v</i></span>
+              <span class="badge">主控</span>
+              <span class="val"><span id="out-v">+0.00</span><em>m/s</em></span>
+            </div>
+            <div class="rail" id="rail-v"><span class="ov lo">◂</span><span class="ov hi">▸</span>
+              <input type="range" id="s-v" min="-6" max="6" step="0.01" value="0" aria-label="速度 v，單位公尺每秒"></div>
+            <div class="scale"><span>−6</span><span>0</span><span>+6</span></div>
+          </div>
+
+          <div class="ctl" data-k="a" style="--c:var(--c-a)">
+            <div class="ctl-head">
+              <span class="dot"></span><span class="nm">加速度<i>a</i></span>
+              <span class="badge">主控</span>
+              <span class="val"><span id="out-a">+0.00</span><em>m/s²</em></span>
+            </div>
+            <div class="rail" id="rail-a"><span class="ov lo">◂</span><span class="ov hi">▸</span>
+              <input type="range" id="s-a" min="-4" max="4" step="0.01" value="0" aria-label="加速度 a，單位公尺每平方秒"></div>
+            <div class="scale"><span>−4</span><span>0</span><span>+4</span></div>
+          </div>
+        </div>
+        <div class="mask"><p>數值已隱藏</p></div>
+      </div>
+    </section>
+
+    <section class="card graphs-card" id="graphs-panel">
+      <div class="card-head">
+        <h2>運動圖形</h2>
+      </div>
+
+      <div class="sampling-control">
+        <div class="sampling-head">
+          <label for="sample-rate">紀錄時間間隔</label>
+          <output id="sample-output" for="sample-rate">連續</output>
+        </div>
+        <input type="range" id="sample-rate" min="0" max="3" step="1" value="3"
+               aria-label="運動圖形與數值表的紀錄時間間隔" aria-valuetext="連續">
+        <div class="sampling-scale" aria-hidden="true">
+          <span>1 秒</span><span>0.5 秒</span><span>0.2 秒</span><span>連續</span>
+        </div>
+      </div>
+
+      <div class="charts-stack">
+        <details class="chart-details" open>
+        <summary>
+          <span class="swatch" style="background:var(--c-x)"></span>
+          <span class="chart-title"><i>x</i>–<i>t</i> 圖</span>
+          <span class="chart-unit">位置 <i>x</i>（m）</span>
+        </summary>
+        <div class="chart-row"><canvas class="chart" id="ch-x" data-k="x" aria-label="位置對時間關係圖"></canvas></div>
+      </details>
+
+      <details class="chart-details" open>
+        <summary>
+          <span class="swatch" style="background:var(--c-v)"></span>
+          <span class="chart-title"><i>v</i>–<i>t</i> 圖</span>
+          <span class="chart-unit">速度 <i>v</i>（m/s）</span>
+        </summary>
+        <div class="chart-row"><canvas class="chart" id="ch-v" data-k="v" aria-label="速度對時間關係圖"></canvas></div>
+      </details>
+
+      <details class="chart-details" open>
+        <summary>
+          <span class="swatch" style="background:var(--c-a)"></span>
+          <span class="chart-title"><i>a</i>–<i>t</i> 圖</span>
+          <span class="chart-unit">加速度 <i>a</i>（m/s²）</span>
+        </summary>
+        <div class="chart-row"><canvas class="chart" id="ch-a" data-k="a" aria-label="加速度對時間關係圖"></canvas></div>
+      </details>
+
+      </div>
+
+      <details class="motion-details">
+        <summary>運動學描述</summary>
+        <div class="motion-copy" aria-live="polite">
+          <strong id="motion-name">手動操作</strong>
+          <p id="motion-description">由使用者直接控制位置、速度或加速度；運動型態會隨操作改變。</p>
+        </div>
+      </details>
+
+    </section>
+
+    <section class="card record-card" id="record-panel">
+      <details class="record-details">
+        <summary id="record-summary">數值紀錄</summary>
+        <div class="table-wrap" role="region" aria-labelledby="record-summary" tabindex="0">
+          <table>
+            <caption class="sr-only" id="record-caption">連續模式的當下即時運動數值</caption>
+            <thead><tr>
+              <th scope="col"><i>t</i> (s)</th>
+              <th scope="col"><span class="swatch" style="background:var(--c-x)"></span><i>x</i> (m)</th>
+              <th scope="col"><span class="swatch" style="background:var(--c-v)"></span><i>v</i> (m/s)</th>
+              <th scope="col"><span class="swatch" style="background:var(--c-a)"></span><i>a</i> (m/s²)</th>
+            </tr></thead>
+            <tbody id="tbody"></tbody>
+          </table>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <div class="height-resizer" id="height-resizer"
+       role="separator" aria-orientation="horizontal"
+       aria-label="調整運動場景、運動圖形與數值紀錄的共同高度"
+       aria-controls="scene-panel graphs-panel record-panel"
+       aria-valuemin="680" aria-valuemax="1000" aria-valuenow="800" aria-valuetext="高度 800 像素"
+       tabindex="0" title="上下拖曳以調整三個區塊的高度">
+    <span aria-hidden="true"></span>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ------------------------------------------------------------------ *
+ * 設定
+ * ------------------------------------------------------------------ */
+const TWIN   = 10;               // 圖表時間視窗 ＝ 每次演示秒數
+const RUNMAX = 10;
+const TAU    = 0.13;             // 放開滑桿後，導出量衰減歸零的時間常數
+const FONT = (s, w) => `${w||400} ${s}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "PingFang TC", sans-serif`;
+
+const CFG = {
+  x:{ name:'位置',   sym:'x', unit:'m',    lim:10, base:10 },
+  v:{ name:'速度',   sym:'v', unit:'m/s',  lim:6,  base:6  },
+  a:{ name:'加速度', sym:'a', unit:'m/s²', lim:4,  base:4  }
+};
+
+const S = { x:0, v:0, a:0, t:0, mode:'x', run:false, phase:0, amp:0, dir:1 };
+const buf = [];                  // 連續模擬資料：{t,x,v,a}
+const SAMPLE_OPTIONS = [
+  { label:'1 秒',   interval:1,   timeDigits:0 },
+  { label:'0.5 秒', interval:0.5, timeDigits:1 },
+  { label:'0.2 秒', interval:0.2, timeDigits:1 },
+  { label:'連續',   interval:null,timeDigits:2 }
+];
+const recorded = [];             // 離散檔位的精確取樣資料
+let sampleIndex = 3, nextSampleIndex = 0;
+let drag = null, hover = null, beh = 'manual', masked = false, answer = null;
+
+const view  = { cur:CFG.x.base, tgt:CFG.x.base, hold:0 };
+const scale = { x:{cur:CFG.x.base,tgt:CFG.x.base,hold:0},
+                v:{cur:CFG.v.base,tgt:CFG.v.base,hold:0},
+                a:{cur:CFG.a.base,tgt:CFG.a.base,hold:0} };
+
+/* ------------------------------------------------------------------ *
+ * 行為模式
+ * ------------------------------------------------------------------ */
+/* 以分段線性的速度剖面產生 {v,a}（週期性） */
+function trapz(t, segs, repeat){
+  const T = segs.reduce((s,g)=>s+g.d, 0);
+  const edge = 1e-9;
+  let u;
+  if (repeat === false) u = Math.max(0, Math.min(t, T));
+  else {
+    u = t % T; if (u < 0) u += T;
+    if (Math.abs(u) < edge || Math.abs(T - u) < edge) u = 0;
+  }
+  for (const g of segs){
+    if (u < g.d - edge) return { v: g.v0 + (g.v1-g.v0)*(u/g.d), a: (g.v1-g.v0)/g.d };
+    u -= g.d;
+    if (Math.abs(u) < edge) u = 0;
+  }
+  const l = segs[segs.length-1];
+  return { v:l.v1, a:0 };
+}
+/* 折返跑：跑到底線慢慢煞住、轉向再跑回來（週期 8 s，淨位移 0） */
+const P_SHUTTLE = [ {d:0.8,v0:0,v1:3}, {d:2.4,v0:3,v1:3}, {d:1.6,v0:3,v1:-3},
+                    {d:2.4,v0:-3,v1:-3}, {d:0.8,v0:-3,v1:0} ];
+/* 蹬牆折返：在牆邊極短時間內反向，加速度是又高又窄的尖峰 */
+const P_WALL    = [ {d:2.6,v0:3,v1:3}, {d:0.3,v0:3,v1:-3}, {d:2.6,v0:-3,v1:-3}, {d:0.3,v0:-3,v1:3} ];
+const P_STOPGO  = [ {d:0.5,v0:0,v1:2}, {d:2.0,v0:2,v1:2}, {d:0.5,v0:2,v1:0}, {d:1.5,v0:0,v1:0} ];
+const P_CRUISE  = [ {d:1.2,v0:0,v1:3}, {d:3.6,v0:3,v1:3}, {d:1.2,v0:3,v1:0}, {d:4.0,v0:0,v1:0} ];
+const P_PACE    = [ {d:0.4,v0:0,v1:1.5}, {d:1.8,v0:1.5,v1:1.5}, {d:0.4,v0:1.5,v1:0}, {d:0.8,v0:0,v1:0},
+                    {d:0.4,v0:0,v1:-1.5},{d:1.8,v0:-1.5,v1:-1.5},{d:0.4,v0:-1.5,v1:0},{d:0.8,v0:0,v1:0} ];
+
+/* 每一種都是日常會用來形容人的行為，而非物理術語 */
+const MODES = {
+  manual  : {
+    label:'手動操作',
+    physics:'由你直接調整位置、速度或加速度，運動情況會跟著操作改變。'
+  },
+  cv      : {
+    label:'悠閒散步', x0:-8, kind:'v',
+    physics:'持續向右直線前進，速度大小和方向都不變，加速度為 0。',
+    f:()=>({ v:1.5, a:0 })
+  },
+  stopgo  : {
+    label:'走走停停', x0:-5, kind:'v',
+    physics:'一直向右，反覆經歷加速、保持固定速度、減速到停下，再短暫停留。',
+    f:t=>trapz(t, P_STOPGO)
+  },
+  pace    : {
+    label:'來回踱步', x0:0, kind:'v',
+    physics:'在直線上來回走：朝一端加速、保持固定速度、減速到停下，停一會兒後再往另一端走。',
+    f:t=>trapz(t, P_PACE)
+  },
+  wander  : {
+    label:'漫無目的閒晃', x0:-2, kind:'v',
+    physics:'速度大小和方向都會隨時間改變，加速度也不固定，所以有時向右、有時向左。',
+    f:t=>({
+      v: 1.5*Math.sin(0.70*t) + 1.0*Math.sin(1.13*t+1.1) + 0.6*Math.sin(1.97*t+2.3),
+      a: 1.05*Math.cos(0.70*t) + 1.13*Math.cos(1.13*t+1.1) + 1.182*Math.cos(1.97*t+2.3)
+    })
+  },
+  cruise  : {
+    label:'小跑步後停下', x0:-9, kind:'v',
+    physics:'先加速，再以固定速度向右前進，最後減速到停止，之後保持不動。',
+    f:t=>trapz(t, P_CRUISE, false)
+  },
+  ca      : {
+    label:'起跑衝刺', x0:-10, kind:'a',
+    physics:'從靜止開始向右運動，加速度保持固定，所以每經過相同時間，速度都增加相同的量。',
+    f:()=>({ a:0.8 })
+  },
+  brake   : {
+    label:'衝刺後煞停', x0:-8, v0:5, kind:'a', stop0:true,
+    physics:'一開始快速向右；在停止前，加速度方向向左且大小固定，所以速度逐漸變小，最後停下並保持不動。',
+    f:(t,s)=>({ a: s.v > 0 ? -1.25 : 0 })
+  },
+  shuttle : {
+    label:'折返跑', x0:0, kind:'v',
+    physics:'先向右加速並保持固定速度；接著減速到停下、改向左加速，再以固定速度跑回，最後停下後重複。',
+    f:t=>trapz(t, P_SHUTTLE)
+  },
+  wall    : {
+    label:'蹬牆折返', x0:-4, kind:'v',
+    physics:'大部分時間以固定速度在兩端之間移動；碰到端點時，速度會在很短時間內反向，因此加速度很大。',
+    f:t=>trapz(t, P_WALL)
+  },
+  shm     : {
+    label:'不停地來回走', kind:'x',
+    physics:'規律地來回運動；通過中央時速度大小最大，到兩端時速度為 0，離開中央後加速度都朝向中央。',
+    f:t=>{                              // 來回但兩端不停留
+      const A = 3.5, w = 2*Math.PI/7;
+      return { x:A*Math.sin(w*t), v:A*w*Math.cos(w*t), a:-A*w*w*Math.sin(w*t) };
+    }
+  },
+  turn    : {
+    label:'跑過頭再折返', x0:2, v0:3.5, kind:'a',
+    physics:'一開始向右跑，但加速度一直向左，所以先變慢到短暫停止，接著向左且越來越快。',
+    f:()=>({ a:-0.9 })
+  },
+  jerk    : {
+    label:'越跑越急', x0:-8, kind:'a',
+    physics:'從靜止開始向右跑，而且加速度隨時間逐漸變大，所以速度增加得越來越快。',
+    f:t=>({ a:0.15*t })
+  }
+};
+
+/* ------------------------------------------------------------------ *
+ * 主題色
+ * ------------------------------------------------------------------ */
+let TH = {};
+function readTheme(){
+  const cs = getComputedStyle(document.documentElement);
+  const g = n => cs.getPropertyValue(n).trim();
+  TH = { surface:g('--surface'), ink:g('--ink'), ink2:g('--ink-2'), muted:g('--muted'),
+         grid:g('--grid'), axis:g('--axis'), track:g('--track'),
+         limbFar:g('--limb-far'),
+         x:g('--c-x'), v:g('--c-v'), a:g('--c-a') };
+}
+readTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readTheme);
+
+document.getElementById('theme').addEventListener('click', ()=>{
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const cur  = document.documentElement.dataset.theme || (dark ? 'dark' : 'light');
+  document.documentElement.dataset.theme = cur === 'dark' ? 'light' : 'dark';
+  readTheme();
+});
+
+/* ------------------------------------------------------------------ *
+ * 工具
+ * ------------------------------------------------------------------ */
+function prep(cv){
+  const dpr = window.devicePixelRatio || 1;
+  const r = cv.getBoundingClientRect();
+  const w = Math.max(1, Math.round(r.width)), h = Math.max(1, Math.round(r.height));
+  if (cv.width !== w*dpr || cv.height !== h*dpr){ cv.width = w*dpr; cv.height = h*dpr; }
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,w,h);
+  return { ctx, W:w, H:h };
+}
+const clamp = (v,lo,hi) => v < lo ? lo : v > hi ? hi : v;
+const fmt = (v,d) => { d = d===undefined?2:d; if (Math.abs(v) < 0.5*Math.pow(10,-d)) v = 0;
+                       return (v<0?'−':'+') + Math.abs(v).toFixed(d); };
+
+function niceHalf(m){
+  m = Math.max(m, 1e-6);
+  const e = Math.pow(10, Math.floor(Math.log10(m))), n = m/e;
+  for (const s of [1,1.5,2,2.5,3,4,5,6,8,10]) if (n <= s + 1e-9) return s*e;
+  return 10*e;
+}
+function niceStep(half){
+  const raw = half/2.5;
+  const e = Math.pow(10, Math.floor(Math.log10(raw))), n = raw/e;
+  return (n < 1.5 ? 1 : n < 3 ? 2 : n < 7 ? 5 : 10) * e;
+}
+const decOf = s => Math.max(0, -Math.floor(Math.log10(s) + 1e-9));
+const tickLab = (v,d) => (v < 0 ? '−' : '') + Math.abs(v).toFixed(d);
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+}
+function arrow(ctx,x0,y,len,color){
+  const d = Math.sign(len), L = Math.abs(len);
+  if (L < 3) return;
+  const head = Math.min(11, Math.max(6, L*0.34));
+  ctx.strokeStyle = color; ctx.fillStyle = color;
+  ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x0 + len - d*head*0.7, y); ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x0+len, y);
+  ctx.lineTo(x0+len - d*head, y - head*0.52);
+  ctx.lineTo(x0+len - d*head, y + head*0.52);
+  ctx.closePath(); ctx.fill();
+}
+
+/* ------------------------------------------------------------------ *
+ * 自動縮放
+ * ------------------------------------------------------------------ */
+function relax(o, tgt, dt, holdT, tc){
+  if (tgt > o.tgt){ o.tgt = tgt; o.hold = 0; }
+  else if (tgt < o.tgt){ o.hold += dt; if (o.hold > holdT){ o.tgt = tgt; o.hold = 0; } }
+  else o.hold = 0;
+  o.cur += (o.tgt - o.cur) * (1 - Math.exp(-dt/tc));
+}
+function updateScales(dt){
+  /* 位置在 ±10 m 之內時完全不縮放；超出後才把視野拉開 */
+  const ax = Math.abs(S.x);
+  relax(view, niceHalf(ax <= CFG.x.base ? CFG.x.base : ax*1.06), dt, 1.2, 0.4);
+
+  const t0 = Math.max(S.t, TWIN) - TWIN;
+  const m = { x:Math.abs(S.x), v:Math.abs(S.v), a:Math.abs(S.a) };
+  for (const s of buf){
+    if (s.t < t0) continue;
+    if (Math.abs(s.x) > m.x) m.x = Math.abs(s.x);
+    if (Math.abs(s.v) > m.v) m.v = Math.abs(s.v);
+    if (Math.abs(s.a) > m.a) m.a = Math.abs(s.a);
+  }
+  for (const k of ['x','v','a'])
+    relax(scale[k], niceHalf(Math.max(CFG[k].base, m[k])), dt, 1.0, 0.35);
+}
+
+/* ------------------------------------------------------------------ *
+ * 場景
+ * ------------------------------------------------------------------ */
+const stage = document.getElementById('stage');
+const chkVec = document.getElementById('vec');
+
+function drawStage(){
+  const { ctx, W, H } = prep(stage);
+  const pad = 56, groundY = Math.round(H - 64);
+  const half = view.cur;
+  const X = x => W/2 + x / half * (W/2 - pad);
+
+  /* 地面 */
+  ctx.strokeStyle = TH.axis; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad-14, groundY+.5); ctx.lineTo(W-pad+14, groundY+.5); ctx.stroke();
+
+  /* 刻度尺 */
+  const step = niceStep(half), minor = step/5, d = decOf(step);
+  ctx.font = FONT(13); ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  const nMax = Math.floor(half/minor + 1e-9);
+  for (let i = -nMax; i <= nMax; i++){
+    const m = i*minor, px = Math.round(X(m)) + .5;
+    if (px < pad-14 || px > W-pad+14) continue;
+    const major = Math.abs(m/step - Math.round(m/step)) < 1e-9;
+    ctx.strokeStyle = major ? TH.axis : TH.grid;
+    ctx.beginPath(); ctx.moveTo(px, groundY+1); ctx.lineTo(px, groundY + (major?9:5)); ctx.stroke();
+    if (major){ ctx.fillStyle = TH.muted; ctx.fillText(tickLab(Math.round(m/step)*step, d), px, groundY + 14); }
+  }
+  ctx.textAlign = 'left'; ctx.fillStyle = TH.muted;
+  ctx.fillText('x (m)', W - pad + 24, groundY + 14);
+
+  const px = X(S.x);
+  /* 人物隨座標軸尺度等比縮放；設下限以免縮到看不見 */
+  const zoom = Math.max(0.32, CFG.x.base / half);
+
+  /* 位置指標 */
+  ctx.fillStyle = TH.x;
+  ctx.beginPath();
+  ctx.moveTo(px, groundY + 2.5); ctx.lineTo(px - 5, groundY + 10.5); ctx.lineTo(px + 5, groundY + 10.5);
+  ctx.closePath(); ctx.fill();
+
+  /* 影子 */
+  ctx.save();
+  ctx.globalAlpha = .12; ctx.fillStyle = TH.ink;
+  ctx.beginPath();
+  ctx.ellipse(px, groundY - zoom, (17 - Math.min(4, S.amp*6))*zoom, 3.4*zoom, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.restore();
+
+  drawPerson(ctx, px, groundY, zoom);
+
+  /* 向量：長度依各自圖表的縱軸尺度換算 */
+  if (chkVec.checked){
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = FONT(14, 500);
+    const reach = Math.min(160, W*0.5 - pad - 24);
+    const headTop = groundY - 87*BODY.K*zoom;          // 箭頭跟著頭頂高度走
+    const rows = [
+      { y: headTop - 18, val: S.v, k: reach/scale.v.cur, c: TH.v, lab: 'v' },
+      { y: headTop - 47, val: S.a, k: reach/scale.a.cur, c: TH.a, lab: 'a' }
+    ];
+    for (const r of rows){
+      const raw = r.val * r.k;
+      if (Math.abs(raw) < 6) continue;
+      const len = clamp(raw, -(px - 10), W - 10 - px);
+      arrow(ctx, px, r.y, len, r.c);
+      ctx.fillStyle = TH.ink2;
+      ctx.fillText(r.lab, px - Math.sign(len)*13, r.y - 0.5);
+    }
+  }
+}
+
+/* ================================================================== *
+ * 人物骨架：本地座標原點＝髖部，+x＝面朝方向，+y＝下
+ * ================================================================== */
+const BODY = { hipH:38, torso:30, L1:19, L2:19, A1:16, A2:15, K:1.18 };
+
+function bodyPose(){
+  const { torso, L1, L2, A1, A2 } = BODY;
+  const amp = S.amp, p = S.phase;
+  const legOf = (ph, hx) => {
+    const th = amp*Math.sin(ph) + 0.09*Math.sign(Math.sin(ph||1e-6));
+    const bend = 0.95*amp*Math.max(0, Math.sin(ph + 0.9)) + 0.03;
+    const kx = hx + L1*Math.sin(th), ky = L1*Math.cos(th);
+    return { hx, kx, ky, fx: kx + L2*Math.sin(th-bend), fy: ky + L2*Math.cos(th-bend), th };
+  };
+  const armOf = (ph, sx) => {
+    const th = -amp*0.85*Math.sin(ph), bend = 0.34 + amp*0.55;
+    const sy = -torso + 4;
+    const ex = sx + A1*Math.sin(th), ey = sy + A1*Math.cos(th);
+    return { sx, sy, ex, ey, wx: ex + A2*Math.sin(th+bend), wy: ey + A2*Math.cos(th+bend) };
+  };
+  return {
+    legN: legOf(p, 1.8), legF: legOf(p + Math.PI, -1.8),
+    armN: armOf(p, 2.2), armF: armOf(p + Math.PI, -2.2)
+  };
+}
+
+/* ================================================================== *
+ * 人物
+ * ================================================================== */
+function drawPerson(ctx, px, groundY, zoom){
+  const { hipH, torso } = BODY;
+  const K = BODY.K * zoom;
+  const amp = S.amp, p = S.phase;
+  const bob = -Math.abs(Math.sin(p)) * 2.2 * Math.min(1, amp*2);
+  const P = bodyPose();
+
+  ctx.save();
+  ctx.translate(px, groundY - hipH*K + bob*K);
+  ctx.rotate(clamp(S.a * 0.040, -0.26, 0.26));
+  ctx.scale(S.dir*K, K);
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+
+  const leg = (j, col) => {
+    ctx.strokeStyle = col; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(j.hx, 0); ctx.lineTo(j.kx, j.ky); ctx.lineTo(j.fx, j.fy); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(j.fx, j.fy); ctx.lineTo(j.fx + 5.4*Math.cos(j.th*0.4), j.fy); ctx.stroke();
+  };
+  const arm = (a, col) => {
+    ctx.strokeStyle = col; ctx.lineWidth = 2.7;
+    ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(a.ex, a.ey); ctx.lineTo(a.wx, a.wy); ctx.stroke();
+  };
+
+  /* 遠側肢體先畫、用較淡的實色表示前後，不用半透明 */
+  leg(P.legF, TH.limbFar);
+  arm(P.armF, TH.limbFar);
+
+  ctx.strokeStyle = TH.ink; ctx.lineWidth = 3.4;          // 軀幹
+  ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(0, -torso); ctx.stroke();
+
+  leg(P.legN, TH.ink);
+  arm(P.armN, TH.ink);
+
+  ctx.fillStyle = TH.ink;                                 // 頭
+  ctx.beginPath(); ctx.arc(0, -torso - 11.5, 7.4, 0, Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+/* ------------------------------------------------------------------ *
+ * 圖表
+ * ------------------------------------------------------------------ */
+const charts = [...document.querySelectorAll('canvas.chart')];
+const PADL = 56, PADR = 74;
+
+function chartPadding(width){
+  if (width < 360) return { L:42, R:48 };
+  if (width < 480) return { L:48, R:58 };
+  return { L:PADL, R:PADR };
+}
+
+function drawChart(cv){
+  const panel = cv.closest('.chart-details');
+  if (panel && !panel.open) return;
+
+  const visibleCharts = charts.filter(c => {
+    const d = c.closest('.chart-details');
+    return !d || d.open;
+  });
+  const last = visibleCharts[visibleCharts.length - 1] === cv;
+  const k = cv.dataset.k, cfg = CFG[k], col = TH[k];
+  const { ctx, W, H } = prep(cv);
+  const { L, R } = chartPadding(W);
+  const T = 8, B = last ? 36 : 12;
+  const pw = W - L - R, ph = H - T - B;
+  if (pw < 40 || ph < 20) return;
+
+  const tEnd = Math.max(S.t, TWIN), t0 = tEnd - TWIN;
+  const span = scale[k].cur * 1.08;
+  const PX = t => L + (t - t0) / TWIN * pw;
+  const PY = v => T + (span - v) / (2*span) * ph;
+  const option = SAMPLE_OPTIONS[sampleIndex];
+  const data = option.interval === null ? buf : recorded;
+
+  /* 時間格線 */
+  ctx.strokeStyle = TH.grid; ctx.lineWidth = 1;
+  for (let tt = Math.ceil(t0/2)*2; tt <= tEnd + 1e-6; tt += 2){
+    const px = Math.round(PX(tt)) + .5;
+    ctx.beginPath(); ctx.moveTo(px, T); ctx.lineTo(px, T+ph); ctx.stroke();
+    if (last){
+      ctx.font = FONT(12.5); ctx.fillStyle = TH.muted; ctx.textAlign = 'center';
+      ctx.fillText(tt.toFixed(0), px, T + ph + 19);
+    }
+  }
+  if (last){
+    ctx.textAlign = 'left'; ctx.fillStyle = TH.muted; ctx.font = FONT(12.5);
+    ctx.fillText('t (s)', L + pw + 16, T + ph + 19);
+  }
+
+  /* 數值格線 */
+  const st = niceStep(scale[k].cur), d = decOf(st);
+  ctx.textAlign = 'right'; ctx.textBaseline = 'middle'; ctx.font = FONT(12.5);
+  for (let i = -Math.floor(span/st + 1e-9); i <= Math.floor(span/st + 1e-9); i++){
+    const tv = i*st, py = Math.round(PY(tv)) + .5;
+    ctx.strokeStyle = tv === 0 ? TH.axis : TH.grid;
+    ctx.beginPath(); ctx.moveTo(L, py); ctx.lineTo(L+pw, py); ctx.stroke();
+    ctx.fillStyle = TH.muted;
+    ctx.fillText(tickLab(tv, d), L - 9, py);
+  }
+
+  /* 連續檔畫平滑曲線；離散檔只畫取樣點，不連線 */
+  ctx.save();
+  ctx.beginPath(); ctx.rect(L, T, pw, ph); ctx.clip();
+  if (option.interval === null){
+    ctx.strokeStyle = col; ctx.lineWidth = 2.4; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+    ctx.beginPath();
+    let started = false, prevS = null;
+    for (const s of data){
+      if (s.t < t0 - 0.2){ prevS = s; continue; }
+      const cx = PX(s.t), cy = PY(s[k]);
+      const jump = prevS && Math.abs(s[k] - prevS[k]) > Math.max(1e-9, s.t - prevS.t) * span * 5;
+      if (!started || jump){ ctx.moveTo(cx, cy); started = true; }
+      else ctx.lineTo(cx, cy);
+      prevS = s;
+    }
+    ctx.stroke();
+  } else {
+    ctx.fillStyle = col;
+    for (const s of data){
+      if (s.t < t0 - 1e-9) continue;
+      const cx = PX(s.t), cy = PY(s[k]);
+      ctx.beginPath(); ctx.arc(cx, cy, 3.6, 0, Math.PI*2); ctx.fill();
+    }
+  }
+  ctx.restore();
+
+  /* 最新一筆紀錄 + 直接標示 */
+  if (data.length){
+    const s = data[data.length-1];
+    const cx = clamp(PX(s.t), L, L+pw), cy = clamp(PY(s[k]), T+2, T+ph-2);
+    ctx.beginPath(); ctx.arc(cx, cy, option.interval === null ? 5 : 4.5, 0, Math.PI*2);
+    ctx.fillStyle = col; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = TH.surface; ctx.stroke();
+    if (hover === null){
+      ctx.font = FONT(14.5, 600); ctx.fillStyle = TH.ink; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText(fmt(s[k]), Math.min(cx + 11, W - R + 4), clamp(cy, T + 8, T + ph - 8));
+    }
+  }
+
+  /* 十字游標：離散模式吸附至最近的紀錄點 */
+  if (hover !== null && data.length){
+    const ht = clamp(hover, Math.max(t0, data[0].t), Math.min(tEnd, data[data.length - 1].t));
+    const smp = option.interval === null ? valueAt(ht) : nearestSample(data, ht);
+    if (smp){
+      const shownT = option.interval === null ? ht : smp.t;
+      const cx = Math.round(PX(shownT)) + .5;
+      ctx.strokeStyle = TH.axis; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(cx, T); ctx.lineTo(cx, T+ph); ctx.stroke();
+
+      const cy = clamp(PY(smp[k]), T+2, T+ph-2);
+      ctx.beginPath(); ctx.arc(cx, cy, 4, 0, Math.PI*2);
+      ctx.fillStyle = TH.surface; ctx.fill(); ctx.strokeStyle = col; ctx.lineWidth = 2; ctx.stroke();
+
+      const txt = `${cfg.sym} = ${fmt(smp[k])} ${cfg.unit}`;
+      const tt  = `t = ${shownT.toFixed(option.timeDigits)} s`;
+      ctx.font = FONT(13);
+      const bw = Math.max(ctx.measureText(txt).width, ctx.measureText(tt).width) + 20;
+      const bh = 42;
+      let bx = cx + 11; if (bx + bw > W - 4) bx = cx - 11 - bw;
+      const by = clamp(cy - bh - 8, T + 2, T + ph - bh - 2);
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,.14)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2;
+      roundRect(ctx, bx, by, bw, bh, 8);
+      ctx.fillStyle = TH.surface; ctx.fill();
+      ctx.restore();
+      ctx.strokeStyle = TH.grid; ctx.lineWidth = 1; roundRect(ctx, bx+.5, by+.5, bw-1, bh-1, 8); ctx.stroke();
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = TH.ink;   ctx.font = FONT(13.5, 600); ctx.fillText(txt, bx + 10, by + 14);
+      ctx.fillStyle = TH.muted; ctx.font = FONT(12.5);      ctx.fillText(tt,  bx + 10, by + 30);
+    }
+  }
+}
+
+function nearestSample(data, t){
+  if (!data.length) return null;
+  let lo = 0, hi = data.length - 1;
+  if (t <= data[0].t) return data[0];
+  if (t >= data[hi].t) return data[hi];
+  while (hi - lo > 1){ const m = (lo+hi) >> 1; (data[m].t < t) ? lo = m : hi = m; }
+  return Math.abs(data[lo].t - t) < Math.abs(data[hi].t - t) ? data[lo] : data[hi];
+}
+function sampleAt(t){
+  return nearestSample(buf, t);
+}
+
+for (const cv of charts){
+  const move = e => {
+    const r = cv.getBoundingClientRect();
+    const { L, R } = chartPadding(r.width);
+    const pw = r.width - L - R;
+    const tEnd = Math.max(S.t, TWIN);
+    const rel = (e.clientX - r.left - L) / pw;
+    hover = (rel < -0.02 || rel > 1.02) ? null : tEnd - TWIN + clamp(rel,0,1) * TWIN;
+  };
+  cv.addEventListener('pointermove', move);
+  cv.addEventListener('pointerleave', () => { hover = null; });
+}
+document.querySelectorAll('.chart-details').forEach(d => {
+  d.addEventListener('toggle', () => { hover = null; schedulePanelLayout(); });
+});
+
+/* ------------------------------------------------------------------ *
+ * 滑桿
+ * ------------------------------------------------------------------ */
+const el = {
+  x:document.getElementById('s-x'), v:document.getElementById('s-v'), a:document.getElementById('s-a'),
+  rx:document.getElementById('rail-x'), rv:document.getElementById('rail-v'), ra:document.getElementById('rail-a'),
+  ox:document.getElementById('out-x'), ov:document.getElementById('out-v'), oa:document.getElementById('out-a'),
+  clock:document.getElementById('clock'), prog:document.getElementById('progbar')
+};
+
+/* 圖形與表格共用的紀錄間隔 */
+const sampleInput   = document.getElementById('sample-rate');
+const sampleOutput  = document.getElementById('sample-output');
+const recordSummary = document.getElementById('record-summary');
+const recordCaption = document.getElementById('record-caption');
+const recordBody    = document.getElementById('tbody');
+const recordRows    = [];
+
+function currentSampleOption(){
+  return SAMPLE_OPTIONS[sampleIndex];
+}
+function snapshotState(t){
+  return { t:t === undefined ? S.t : t, x:S.x, v:S.v, a:S.a };
+}
+function syncSamplingControl(){
+  const option = currentSampleOption();
+  const pct = sampleIndex / (SAMPLE_OPTIONS.length - 1) * 100;
+  sampleInput.value = String(sampleIndex);
+  sampleInput.setAttribute('aria-valuetext', option.label);
+  sampleInput.style.setProperty('--fill',
+    `linear-gradient(90deg, var(--ink-2) 0 ${pct}%, var(--track) ${pct}% 100%)`);
+  sampleOutput.textContent = option.label;
+  recordSummary.textContent = '數值紀錄';
+  recordCaption.textContent = option.interval === null
+    ? '連續模式的當下即時運動數值'
+    : `每 ${option.label}取樣一次的運動數值紀錄`;
+}
+function fillRecordRow(index, sample, timeText){
+  const cells = recordRows[index];
+  if (!cells || !sample) return;
+  cells[0].textContent = timeText;
+  cells[1].textContent = fmt(sample.x);
+  cells[2].textContent = fmt(sample.v);
+  cells[3].textContent = fmt(sample.a);
+}
+function buildRecordTable(){
+  const option = currentSampleOption();
+  const fragment = document.createDocumentFragment();
+  recordBody.textContent = '';
+  recordRows.length = 0;
+
+  if (option.interval === null){
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td></td><td></td><td></td><td></td>';
+    fragment.appendChild(tr);
+    recordRows.push([...tr.children]);
+  } else {
+    const count = Math.round(RUNMAX / option.interval);
+    for (let i = 0; i <= count; i++){
+      const t = sampleTime(i, option);
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${t.toFixed(option.timeDigits)}</td><td></td><td></td><td></td>`;
+      fragment.appendChild(tr);
+      recordRows.push([...tr.children]);
+    }
+  }
+  recordBody.appendChild(fragment);
+
+  if (option.interval === null){
+    fillRecordRow(0, snapshotState(), S.t.toFixed(option.timeDigits));
+  } else {
+    recorded.forEach((sample, i) => {
+      fillRecordRow(i, sample, sample.t.toFixed(option.timeDigits));
+    });
+  }
+}
+/* 在兩筆連續模擬資料間線性內插，取得精確取樣時刻的數值 */
+function rawValueAt(t){
+  if (!buf.length) return null;
+  if (t < buf[0].t) return buf[0];
+  const end = buf[buf.length-1];
+  if (t >= end.t) return end;
+
+  /* 取 t 以前最後一筆；同時刻有瞬時變更時採變更後的右極限。 */
+  let lo = 0, hi = buf.length;
+  while (lo < hi){
+    const m = (lo + hi) >> 1;
+    if (buf[m].t <= t) lo = m + 1;
+    else hi = m;
+  }
+  const s0 = buf[Math.max(0, lo - 1)];
+  if (Math.abs(s0.t - t) < 1e-9) return s0;
+  const s1 = buf[lo], f = (t - s0.t) / ((s1.t - s0.t) || 1);
+  return {
+    t,
+    x:s0.x + (s1.x-s0.x)*f,
+    v:s0.v + (s1.v-s0.v)*f,
+    a:s0.a + (s1.a-s0.a)*f
+  };
+}
+/* 自動模式以解析規則決定跳變時刻的後值，避免在跳變兩側做錯誤內插。 */
+function valueAt(t){
+  const sample = rawValueAt(t);
+  if (!sample || beh === 'manual') return sample;
+  const M = MODES[beh], exact = M.f(t, { ...S, ...sample, t });
+  if (M.kind === 'x') return { t, x:exact.x, v:exact.v, a:exact.a };
+  if (M.kind === 'v') return { t, x:sample.x, v:exact.v, a:exact.a };
+  return { t, x:sample.x, v:sample.v, a:exact.a };
+}
+function sampleTime(index, option){
+  return Number((index * option.interval).toFixed(10));
+}
+function rebuildRecordedSamples(){
+  const option = currentSampleOption();
+  recorded.length = 0;
+  nextSampleIndex = 0;
+  if (option.interval === null) return;
+
+  const maxIndex = Math.round(RUNMAX / option.interval);
+  while (nextSampleIndex <= maxIndex){
+    const t = sampleTime(nextSampleIndex, option);
+    if (t > S.t + 1e-9) break;
+    const sample = valueAt(t);
+    if (!sample) break;
+    recorded.push({ t, x:sample.x, v:sample.v, a:sample.a });
+    nextSampleIndex++;
+  }
+}
+function resetHistory(){
+  buf.length = 0;
+  buf.push(snapshotState(0));
+  rebuildRecordedSamples();
+  buildRecordTable();
+}
+function updateRecords(){
+  const option = currentSampleOption();
+  if (option.interval === null){
+    fillRecordRow(0, snapshotState(), S.t.toFixed(option.timeDigits));
+    return;
+  }
+
+  const maxIndex = Math.round(RUNMAX / option.interval);
+  while (nextSampleIndex <= maxIndex){
+    const t = sampleTime(nextSampleIndex, option);
+    if (t > S.t + 1e-9) break;
+    const sample = valueAt(t);
+    if (!sample) break;
+    const exact = { t, x:sample.x, v:sample.v, a:sample.a };
+    recorded.push(exact);
+    fillRecordRow(nextSampleIndex, exact, t.toFixed(option.timeDigits));
+    nextSampleIndex++;
+  }
+}
+function syncPausedStateToHistory(){
+  if (S.run) return;
+  const current = snapshotState();
+  const last = buf[buf.length - 1];
+  const previous = buf[buf.length - 2];
+  if (S.t <= 1e-9 && last){
+    buf[buf.length - 1] = current;
+  } else if (last && previous && Math.abs(last.t - S.t) < 1e-9 && Math.abs(previous.t - S.t) < 1e-9){
+    buf[buf.length - 1] = current;
+  } else {
+    buf.push(current);
+  }
+
+  const option = currentSampleOption();
+  if (option.interval === null){
+    fillRecordRow(0, current, S.t.toFixed(option.timeDigits));
+  } else {
+    rebuildRecordedSamples();
+    recorded.forEach((sample, i) => {
+      fillRecordRow(i, sample, sample.t.toFixed(option.timeDigits));
+    });
+  }
+}
+sampleInput.addEventListener('input', () => {
+  sampleIndex = Number(sampleInput.value);
+  hover = null;
+  syncSamplingControl();
+  rebuildRecordedSamples();
+  buildRecordTable();
+});
+const rows = {};
+document.querySelectorAll('.ctl').forEach(r => rows[r.dataset.k] = r);
+
+function setMode(k){
+  S.mode = k;
+  for (const j of ['x','v','a']) rows[j].classList.toggle('lead', j === k);
+}
+
+for (const k of ['x','v','a']){
+  const input = el[k];
+  input.addEventListener('pointerdown', () => { drag = k; });
+  input.addEventListener('input', () => {
+    drag = drag || k;
+    if (beh !== 'manual'){ setBehavior('manual', false); ansEl.textContent = ''; }
+    setMode(k);
+    S[k] = parseFloat(input.value);
+    if (k === 'x'){ S.v = 0; S.a = 0; }
+    syncPausedStateToHistory();
+  });
+  input.addEventListener('keydown', () => { drag = k; });
+  input.addEventListener('change', () => { drag = null; });
+  input.addEventListener('wheel', e => {          // 捲動頁面時不誤觸滑桿
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1;
+    scrollBy(0, e.deltaY * unit);
+  }, { passive:false });
+}
+addEventListener('pointerup', () => { drag = null; });
+addEventListener('pointercancel', () => { drag = null; });
+addEventListener('keyup', () => { drag = null; });
+addEventListener('blur', () => { drag = null; });
+
+function syncSliders(){
+  for (const k of ['x','v','a']){
+    const input = el[k], cfg = CFG[k], rail = el['r'+k], raw = S[k];
+    if (drag !== k) input.value = clamp(raw, -cfg.lim, cfg.lim).toFixed(2);
+    const pct = (parseFloat(input.value) + cfg.lim) / (2*cfg.lim) * 100;
+    const lo = Math.min(pct, 50), hi = Math.max(pct, 50);
+    input.style.setProperty('--fill',
+      `linear-gradient(90deg, var(--track) 0 ${lo}%, var(--c) ${lo}% ${hi}%, var(--track) ${hi}% 100%)`);
+    rail.classList.toggle('off-lo', raw < -cfg.lim - 1e-9);
+    rail.classList.toggle('off-hi', raw >  cfg.lim + 1e-9);
+  }
+  el.ox.textContent = fmt(S.x);
+  el.ov.textContent = fmt(S.v);
+  el.oa.textContent = fmt(S.a);
+  el.clock.textContent = S.t.toFixed(2);
+  el.prog.style.width = clamp(S.t / RUNMAX * 100, 0, 100).toFixed(1) + '%';
+}
+
+/* ------------------------------------------------------------------ *
+ * 物理
+ * ------------------------------------------------------------------ */
+function step(dt){
+  const lp = 1 - Math.exp(-dt / TAU);
+  const t0 = S.t, t1 = t0 + dt;
+
+  if (beh !== 'manual'){
+    const M = MODES[beh];
+    if (M.kind === 'x'){
+      const r1 = M.f(t1, S);
+      S.x = r1.x; S.v = r1.v; S.a = r1.a;
+    } else if (M.kind === 'a'){
+      const v0 = S.v;
+      const a0 = M.f(t0, S).a;
+      const trialV = v0 + a0 * dt;
+      if (M.stop0 && v0 > 0 && trialV <= 0){
+        const stopDt = a0 < 0 ? clamp(-v0 / a0, 0, dt) : dt;
+        S.x += v0 * stopDt + 0.5 * a0 * stopDt * stopDt;
+        S.v = 0; S.a = 0;
+        if (stopDt < dt - 1e-9){
+          buf.push({ t:t0 + stopDt, x:S.x, v:0, a:0 });
+        }
+      } else {
+        const a1 = M.f(t1, { ...S, t:t1, v:trialV }).a;
+        const v1 = v0 + (a0 + a1) * 0.5 * dt;
+        S.x += (v0 + v1) * 0.5 * dt;
+        S.v = v1; S.a = a1;
+      }
+    } else {
+      const r0 = M.f(t0, S), r1 = M.f(t1, S);
+      S.x += (r0.v + r1.v) * 0.5 * dt;
+      S.v = r1.v; S.a = r1.a;
+    }
+
+  } else if (S.mode === 'a'){
+    const v0 = S.v;
+    S.v += S.a * dt;
+    S.x += (v0 + S.v) * 0.5 * dt;
+
+  } else if (S.mode === 'v'){
+    if (!drag){
+      S.a += lp * (0 - S.a);
+      if (Math.abs(S.a) < 0.005) S.a = 0;
+    }
+    S.x += S.v * dt;
+
+  } else {
+    if (!drag){
+      S.v += lp * (0 - S.v);
+      S.a += lp * (0 - S.a);
+      if (Math.abs(S.v) < 0.005) S.v = 0;
+      if (Math.abs(S.a) < 0.005) S.a = 0;
+    }
+  }
+
+  /* 步態與衣裳 */
+  const sp = Math.abs(S.v);
+  const ampT = sp < 0.06 ? 0 : Math.min(0.62, 0.15 + sp * 0.085);
+  S.amp += (1 - Math.exp(-dt/0.18)) * (ampT - S.amp);
+  if (sp >= 0.06){
+    S.phase += (2.1 + sp * 0.95) * dt;
+    S.dir = Math.sign(S.v);
+  } else if (S.amp > 0.005){
+    S.phase += 2.0 * dt;
+  }
+  if (S.phase > Math.PI*2) S.phase -= Math.PI*2;
+
+  S.t = t1;
+  buf.push({ t:S.t, x:S.x, v:S.v, a:S.a });
+  while (buf.length > 2 && buf[0].t < S.t - TWIN - 1) buf.shift();
+}
+
+/* 拖曳主控滑桿時，以固定時窗的數值微分推得上層物理量 */
+const DW = 0.14;
+function derive(dt){
+  const past = sampleAt(S.t - DW);
+  if (!past) return;
+  const span = S.t - past.t;
+  if (span < 0.02) return;
+  const lp = 1 - Math.exp(-dt / 0.06);
+  if (S.mode === 'x'){
+    S.v += lp * (clamp((S.x - past.x) / span, -CFG.v.lim*2, CFG.v.lim*2) - S.v);
+    S.a += lp * (clamp((S.v - past.v) / span, -CFG.a.lim*2, CFG.a.lim*2) - S.a);
+  } else if (S.mode === 'v'){
+    S.a += lp * (clamp((S.v - past.v) / span, -CFG.a.lim*2, CFG.a.lim*2) - S.a);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * 主迴圈
+ * ------------------------------------------------------------------ */
+let prev = performance.now();
+function frame(now){
+  let dt = clamp((now - prev)/1000, 0.001, 0.05);
+  prev = now;
+
+  if (S.run){
+    let stopNow = false;
+    if (S.t + dt >= RUNMAX){ dt = RUNMAX - S.t; stopNow = true; }
+    if (dt > 0){
+      if (drag && (S.mode === 'x' || S.mode === 'v')) derive(dt);
+      step(dt);
+    }
+    if (stopNow){ S.t = RUNMAX; setRun(false); }
+  }
+  updateScales(dt);
+  updateRecords();
+  syncSliders();
+  drawStage();
+  for (const cv of charts) drawChart(cv);
+  requestAnimationFrame(frame);
+}
+
+/* ------------------------------------------------------------------ *
+ * 控制項
+ * ------------------------------------------------------------------ */
+const playBtn       = document.getElementById('play');
+const sel           = document.getElementById('beh');
+const quizBtn       = document.getElementById('quiz');
+const ansEl         = document.getElementById('ans');
+const motionName    = document.getElementById('motion-name');
+const motionDesc    = document.getElementById('motion-description');
+const valueControls  = document.getElementById('ctls');
+const valueInputs    = [el.x, el.v, el.a];
+const workspaceGrid  = document.getElementById('workspace-grid');
+const heightResizer  = document.getElementById('height-resizer');
+const sceneCard      = document.querySelector('.scene-card');
+const graphsCard     = document.querySelector('.graphs-card');
+const chartsStack    = document.querySelector('.charts-stack');
+const chartPanels    = [...document.querySelectorAll('.chart-details')];
+const motionDetails  = document.querySelector('.motion-details');
+const recordCard     = document.querySelector('.record-card');
+const recordDetails  = document.querySelector('.record-details');
+const tableWrap      = document.querySelector('.table-wrap');
+const pairedLayout   = matchMedia('(min-width:1101px)');
+const threeColumns   = matchMedia('(min-width:1261px)');
+const PANEL_HEIGHT_MIN = 680;
+const PANEL_HEIGHT_MAX = 1000;
+const PANEL_HEIGHT_DEFAULT = PANEL_HEIGHT_MAX * 0.8;
+const PANEL_HEIGHT_STEP = 20;
+let panelLayoutFrame = 0;
+let panelResizeObserver = null;
+let heightDrag = null;
+
+workspaceGrid.classList.add('height-set');
+workspaceGrid.style.setProperty('--panel-height', PANEL_HEIGHT_DEFAULT + 'px');
+
+function cssPx(value){ return parseFloat(value) || 0; }
+function schedulePanelLayout(){
+  if (panelLayoutFrame) cancelAnimationFrame(panelLayoutFrame);
+  panelLayoutFrame = requestAnimationFrame(updatePanelLayout);
+}
+function currentPanelHeight(){
+  const saved = parseFloat(workspaceGrid.style.getPropertyValue('--panel-height'));
+  return Number.isFinite(saved) ? saved : sceneCard.getBoundingClientRect().height;
+}
+function updateHeightAria(height){
+  heightResizer.setAttribute('aria-valuenow', String(height));
+  heightResizer.setAttribute('aria-valuetext', `高度 ${height} 像素`);
+}
+function applyPanelHeight(value){
+  const height = clamp(Math.round(value), PANEL_HEIGHT_MIN, PANEL_HEIGHT_MAX);
+  workspaceGrid.classList.add('height-set');
+  workspaceGrid.style.setProperty('--panel-height', height + 'px');
+  updateHeightAria(height);
+  schedulePanelLayout();
+}
+function finishHeightDrag(event){
+  if (!heightDrag) return;
+  if (event && event.pointerId !== undefined && event.pointerId !== heightDrag.pointerId) return;
+  const pointerId = heightDrag.pointerId;
+  heightDrag = null;
+  document.body.classList.remove('resizing-panels');
+  try {
+    if (heightResizer.hasPointerCapture(pointerId)) heightResizer.releasePointerCapture(pointerId);
+  } catch {}
+}
+function syncHeightResizerAvailability(){
+  const enabled = threeColumns.matches;
+  if (!enabled && document.activeElement === heightResizer){
+    playBtn.focus({ preventScroll:true });
+  }
+  heightResizer.tabIndex = enabled ? 0 : -1;
+  heightResizer.setAttribute('aria-hidden', enabled ? 'false' : 'true');
+  if (!enabled) finishHeightDrag();
+  if (enabled){
+    const height = clamp(Math.round(currentPanelHeight()), PANEL_HEIGHT_MIN, PANEL_HEIGHT_MAX);
+    updateHeightAria(height);
+  }
+  schedulePanelLayout();
+}
+function syncRecordSidebar(){
+  const collapsed = !recordDetails.open;
+  workspaceGrid.classList.toggle('record-sidebar-collapsed', collapsed);
+  recordCard.classList.toggle('is-collapsed', collapsed);
+  schedulePanelLayout();
+}
+function updatePanelLayout(){
+  panelLayoutFrame = 0;
+
+  const openPanels = chartPanels.filter(panel => panel.open);
+  chartsStack.classList.toggle('has-open-chart', pairedLayout.matches && openPanels.length > 0);
+
+  if (pairedLayout.matches){
+    let fixedHeight = 0;
+    for (const panel of chartPanels){
+      const summary = panel.querySelector('summary');
+      const style = getComputedStyle(panel);
+      fixedHeight += summary.getBoundingClientRect().height
+        + cssPx(style.marginTop) + cssPx(style.marginBottom)
+        + cssPx(style.paddingTop) + cssPx(style.paddingBottom)
+        + cssPx(style.borderTopWidth) + cssPx(style.borderBottomWidth);
+    }
+    if (openPanels.length){
+      const height = Math.max(72, Math.floor((chartsStack.clientHeight - fixedHeight) / openPanels.length));
+      chartsStack.style.setProperty('--open-chart-height', height + 'px');
+    } else {
+      chartsStack.style.removeProperty('--open-chart-height');
+    }
+  } else {
+    chartsStack.style.removeProperty('--open-chart-height');
+  }
+
+  tableWrap.style.removeProperty('height');
+  tableWrap.style.removeProperty('max-height');
+  if (threeColumns.matches && recordDetails.open){
+    const cardRect = recordCard.getBoundingClientRect();
+    const wrapRect = tableWrap.getBoundingClientRect();
+    const cardStyle = getComputedStyle(recordCard);
+    const height = Math.max(120, Math.floor(cardRect.bottom - cssPx(cardStyle.borderBottomWidth)
+      - cssPx(cardStyle.paddingBottom) - wrapRect.top));
+    tableWrap.style.height = height + 'px';
+    tableWrap.style.maxHeight = 'none';
+  }
+
+  if (threeColumns.matches && !heightDrag){
+    const height = clamp(Math.round(sceneCard.getBoundingClientRect().height), PANEL_HEIGHT_MIN, PANEL_HEIGHT_MAX);
+    updateHeightAria(height);
+  }
+}
+
+motionDetails.addEventListener('toggle', schedulePanelLayout);
+recordSummary.addEventListener('click', () => {
+  const willCollapse = recordDetails.open;
+  workspaceGrid.classList.toggle('record-sidebar-collapsed', willCollapse);
+  recordCard.classList.toggle('is-collapsed', willCollapse);
+});
+recordDetails.addEventListener('toggle', syncRecordSidebar);
+pairedLayout.addEventListener('change', schedulePanelLayout);
+threeColumns.addEventListener('change', syncHeightResizerAvailability);
+addEventListener('resize', schedulePanelLayout);
+
+heightResizer.addEventListener('pointerdown', event => {
+  if (!threeColumns.matches || event.button !== 0) return;
+  heightDrag = {
+    pointerId:event.pointerId,
+    startY:event.clientY,
+    startHeight:clamp(sceneCard.getBoundingClientRect().height, PANEL_HEIGHT_MIN, PANEL_HEIGHT_MAX)
+  };
+  heightResizer.setPointerCapture(event.pointerId);
+  document.body.classList.add('resizing-panels');
+  event.preventDefault();
+});
+heightResizer.addEventListener('pointermove', event => {
+  if (!heightDrag || event.pointerId !== heightDrag.pointerId) return;
+  applyPanelHeight(heightDrag.startHeight + event.clientY - heightDrag.startY);
+});
+heightResizer.addEventListener('pointerup', finishHeightDrag);
+heightResizer.addEventListener('pointercancel', finishHeightDrag);
+heightResizer.addEventListener('lostpointercapture', () => {
+  heightDrag = null;
+  document.body.classList.remove('resizing-panels');
+});
+heightResizer.addEventListener('keydown', event => {
+  if (!threeColumns.matches) return;
+  const current = currentPanelHeight();
+  let next = null;
+  if (event.key === 'ArrowUp') next = current - PANEL_HEIGHT_STEP;
+  else if (event.key === 'ArrowDown') next = current + PANEL_HEIGHT_STEP;
+  else if (event.key === 'PageUp') next = current - PANEL_HEIGHT_STEP * 3;
+  else if (event.key === 'PageDown') next = current + PANEL_HEIGHT_STEP * 3;
+  else if (event.key === 'Home') next = PANEL_HEIGHT_MIN;
+  else if (event.key === 'End') next = PANEL_HEIGHT_MAX;
+  if (next !== null){
+    event.preventDefault();
+    applyPanelHeight(next);
+  }
+});
+
+if ('ResizeObserver' in window){
+  panelResizeObserver = new ResizeObserver(schedulePanelLayout);
+  panelResizeObserver.observe(sceneCard);
+  panelResizeObserver.observe(graphsCard);
+  panelResizeObserver.observe(chartsStack);
+  panelResizeObserver.observe(recordCard);
+}
+
+function updateMotionDescription(){
+  const mode = MODES[beh] || MODES.manual;
+  motionName.textContent = mode.label;
+  motionDesc.textContent = mode.physics;
+}
+
+function resetBehaviorSections(){
+  chartPanels.forEach(section => { section.open = true; });
+  motionDetails.open = false;
+  recordDetails.open = false;
+  hover = null;
+  syncRecordSidebar();
+}
+
+function resetScales(){
+  view.cur = view.tgt = CFG.x.base; view.hold = 0;
+  for (const k of ['x','v','a']){ scale[k].cur = scale[k].tgt = CFG[k].base; scale[k].hold = 0; }
+}
+
+function setRun(on){
+  if (on && S.t >= RUNMAX - 1e-9){          // 演示滿 10 秒後，再播放即從 t = 0 重新開始
+    if (beh === 'manual'){ S.t = 0; resetScales(); resetHistory(); }
+    else doReset(false);
+  }
+  S.run = on;
+  playBtn.textContent = on ? '暫停' : '播放';
+  playBtn.classList.toggle('on', on);
+}
+playBtn.addEventListener('click', () => setRun(!S.run));
+document.getElementById('reset').addEventListener('click', () => doReset(true));
+
+function doReset(pause){
+  const M = MODES[beh] || MODES.manual;
+  S.x = M.x0 || 0; S.v = M.v0 || 0; S.a = 0;
+  if (M.f){                                  // 依模式的解析式決定起始狀態
+    const r = M.f(0, S);
+    if (M.kind === 'x'){ S.x = r.x; S.v = r.v; S.a = r.a; }
+    else if (M.kind === 'a'){ S.a = r.a; }
+    else { S.v = r.v; S.a = r.a; }
+  }
+  S.t = 0; S.phase = 0; S.amp = 0; S.dir = 1;
+  resetScales();
+  resetHistory();
+  if (beh === 'manual') setMode('x');
+  if (pause !== false) setRun(false);
+}
+
+function setBehavior(k, restart){
+  setRun(false);
+  beh = k;
+  resetBehaviorSections();
+  updateMotionDescription();
+  if (!masked) sel.value = k;
+  if (k === 'manual'){ setMode(S.mode || 'v'); return; }   // 保留現況，僅交還控制權
+  setMode(null);
+  if (restart !== false) doReset(true);
+}
+sel.addEventListener('change', () => { ansEl.textContent = ''; setBehavior(sel.value, true); });
+
+/* 隨機遮蔽 */
+function startQuiz(){
+  const keys = Object.keys(MODES).filter(k => k !== 'manual');
+  answer = keys[Math.floor(Math.random()*keys.length)];
+  masked = true;
+  document.body.classList.add('masked');
+  valueControls.inert = true;
+  valueControls.setAttribute('aria-hidden', 'true');
+  valueInputs.forEach(input => { input.disabled = true; });
+  sel.value = '__q'; sel.disabled = true;
+  quizBtn.textContent = '公布答案'; quizBtn.classList.add('on');
+  ansEl.textContent = '';
+  setBehavior(answer, true);
+}
+function reveal(){
+  masked = false;
+  document.body.classList.remove('masked');
+  valueControls.inert = false;
+  valueControls.removeAttribute('aria-hidden');
+  valueInputs.forEach(input => { input.disabled = false; });
+  sel.disabled = false; sel.value = beh;
+  quizBtn.textContent = '出題'; quizBtn.classList.remove('on');
+  ansEl.textContent = '答案：' + MODES[answer].label;
+}
+quizBtn.addEventListener('click', () => masked ? reveal() : startQuiz());
+
+addEventListener('keydown', e => {
+  const t = e.target;
+  if (t.closest && t.closest('button,select,input,summary,a,textarea,[contenteditable="true"],[role="region"],[role="separator"]')) return;
+  if (e.code === 'Space'){ e.preventDefault(); setRun(!S.run); }
+  else if (e.key === 'r' || e.key === 'R'){ doReset(true); }
+});
+
+setMode('x');
+syncSamplingControl();
+updateMotionDescription();
+resetHistory();
+setRun(false);
+syncRecordSidebar();
+syncHeightResizerAvailability();
+schedulePanelLayout();
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
