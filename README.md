@@ -3,7 +3,7 @@
 歡迎來到 **Money's Physics Lab**！這是一個專為中學物理教學與自主學習設計的 **Web 3D/2D 互動模擬實驗室**[cite: 1, 2]。
 透過直覺的視覺化操作介面與即時圖表，將抽象的物理概念轉化為可互動、可探索的動態實驗[cite: 1, 2]。
 
-🌐 **線上體驗網址**：[https://Money-Lin.github.io/money-physics/](https://Money-Lin.github.io/money-physics/)
+🌐 **線上體驗網址**：[https://money-lin.github.io/Money-Physics-Lab/]
 
 ---
 
